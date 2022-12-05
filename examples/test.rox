@@ -1,0 +1,4 @@
+def main() {
+  echo("rox n' rolls")
+}
+
