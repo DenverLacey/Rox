@@ -1,4 +1,4 @@
-def main() {
-  echo("rox n' rolls")
+fn main() {
+  XXX_print 1
 }
 
