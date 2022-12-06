@@ -1,5 +1,8 @@
 use debug_print::debug_println as dprintln;
-use std::{path::{Path, PathBuf}, ffi::OsStr};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 mod parsing;
 use parsing::tokenization;
@@ -23,7 +26,9 @@ fn main() -> Result<(), &'static str> {
 
         let dir = std::fs::read_dir(project_path).map_err(|_| "Failed to read directory.")?;
         for dir_entry in dir {
-            let path = dir_entry.map_err(|_| "Failed to walk project directory.")?.path();
+            let path = dir_entry
+                .map_err(|_| "Failed to walk project directory.")?
+                .path();
             if path.extension() != Some(OsStr::new("rox")) {
                 continue;
             }
@@ -40,7 +45,7 @@ fn main() -> Result<(), &'static str> {
         dprintln!("{:#?}", loaded_file);
 
         let tokens = tokenize_file(&loaded_file);
-        dprintln!("{:?}", tokens);
+        dprintln!("{:#?}", tokens);
     } else {
         return Err("Given path is neither a file or a directory.");
     }
@@ -53,7 +58,9 @@ fn load_file<P: AsRef<Path>>(path: P) -> Result<LoadedFile, &'static str> {
 
     let source = std::fs::read_to_string(path).map_err(|_| "Failed to read file.")?;
     Ok(LoadedFile {
-        filepath: path.canonicalize().map_err(|_| "Failed to canonicalize project path.")?,
+        filepath: path
+            .canonicalize()
+            .map_err(|_| "Failed to canonicalize project path.")?,
         source,
     })
 }
@@ -69,4 +76,3 @@ struct ParsedFile {
     filepath: PathBuf,
     ast: (),
 }
-

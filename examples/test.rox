@@ -1,4 +1,4 @@
 fn main() {
-  XXX_print 1
+  XXXprint 1
 }
 
