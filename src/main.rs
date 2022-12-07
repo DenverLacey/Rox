@@ -5,6 +5,7 @@ use std::{
 };
 
 mod parsing;
+mod util;
 use parsing::tokenization;
 
 use crate::parsing::tokenization::tokenize_file;

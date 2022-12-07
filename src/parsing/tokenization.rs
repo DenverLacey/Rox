@@ -1,6 +1,9 @@
-use std::{iter::Peekable, str::Chars};
+use std::str::Chars;
 
 use crate::LoadedFile;
+use crate::util::iter::{Peekable, PeekableIterExt};
+
+use debug_print::debug_println as dprintln;
 
 pub(crate) fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
     Tokenizer::new(file).collect()
@@ -31,6 +34,7 @@ pub enum TokenData {
     // Literals
     Ident(String), // @IMPROVE: This could probably be a &str with some lifetime
     Int(i64),
+    Float(f64),
 
     // Delimeters
     Newline,
@@ -69,15 +73,23 @@ struct Tokenizer<'file> {
 impl<'file> Tokenizer<'file> {
     fn new(file: &'file LoadedFile) -> Self {
         Self {
-            source: file.source.chars().peekable(),
+            source: file.source.chars().very_peekable(),
             cur_loc: CodeLocation { ln: 1, ch: 1 },
             previous_was_newline: true,
             ended: false,
         }
     }
 
+    fn is_ident_begin(c: char) -> bool {
+        c == '_' || c.is_alphabetic()
+    }
+
+    fn is_ident_cont(c: char) -> bool {
+        Self::is_ident_begin(c) || c.is_ascii_digit()
+    }
+
     fn peek_char(&mut self) -> char {
-        self.source.peek().map(|c| *c).unwrap_or_default()
+        self.source.peek(0).map(|c| *c).unwrap_or_default()
     }
 
     fn next_char(&mut self) -> char {
@@ -104,7 +116,7 @@ impl<'file> Tokenizer<'file> {
         let c = self.peek_char();
         match c {
             _ if c.is_ascii_digit() => self.tokenize_number(),
-            _ if c.is_alphabetic() => Ok(self.tokenize_identifier_or_keyword()),
+            _ if Self::is_ident_begin(c) => Ok(self.tokenize_identifier_or_keyword()),
             _ => self.tokenize_punctuation(),
         }
     }
@@ -133,6 +145,8 @@ impl<'file> Tokenizer<'file> {
     }
 
     fn tokenize_number(&mut self) -> Result<Token, &'static str> {
+        dprintln!("PARSING NUMBER!");
+
         let tok_loc = self.cur_loc;
 
         let mut word = String::new();
@@ -140,18 +154,30 @@ impl<'file> Tokenizer<'file> {
             word.push(self.next_char());
         }
 
-        // @TODO: Handle floating point numbers
-        let n = word.parse().map_err(|_| "Failed to parse number.")?;
+        let data = if self.peek_char() == '.' && self.source.peek(1).filter(|c| c.is_ascii_digit()).is_some() {
+            word.push('.');
+            _ = self.next_char();
 
-        return Ok(Token::new(tok_loc, TokenData::Int(n)));
+            while self.peek_char().is_ascii_digit() {
+                word.push(self.next_char());
+            }
+
+            let f = word.parse().map_err(|_| "Failed to parse number.")?;
+            TokenData::Float(f)
+        } else {
+            dprintln!("PARSING INT!");
+            let n = word.parse().map_err(|_| "Failed to parse number.")?;
+            TokenData::Int(n)
+        };
+
+        return Ok(Token::new(tok_loc, data));
     }
 
     fn tokenize_identifier_or_keyword(&mut self) -> Token {
         let tok_loc = self.cur_loc;
 
         let mut word = String::new();
-        while self.peek_char().is_alphanumeric() {
-            // @TODO: Handle underscores
+        while Self::is_ident_cont(self.peek_char()){
             word.push(self.next_char());
         }
 
@@ -188,7 +214,10 @@ impl<'file> Tokenizer<'file> {
             '/' => TokenData::Slash,
             '%' => TokenData::Percent,
 
-            _ => return Err("Invalid operator."),
+            c => {
+                dprintln!("Invalid operator = {:?}", c);
+                return Err("Invalid operator.");
+            }
         };
 
         return Ok(Token::new(tok_loc, op));
