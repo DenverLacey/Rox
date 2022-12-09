@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::ir::ast::Ast;
+
 #[derive(Debug)]
 pub struct LoadedFile {
     pub filepath: PathBuf,
@@ -9,6 +11,5 @@ pub struct LoadedFile {
 #[derive(Debug)]
 pub struct ParsedFile {
     pub filepath: PathBuf,
-    pub ast: (),
+    pub ast: Ast,
 }
-

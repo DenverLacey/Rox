@@ -1,9 +1,7 @@
 use std::str::Chars;
 
-use crate::LoadedFile;
-use crate::util::iter::{Peekable, PeekableIterExt};
-
-use debug_print::debug_println as dprintln;
+use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
+use crate::util::structures::LoadedFile;
 
 pub(crate) fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
     Tokenizer::new(file).collect()
@@ -11,24 +9,24 @@ pub(crate) fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static st
 
 #[derive(Debug)]
 pub struct Token {
-    loc: CodeLocation,
-    data: TokenData,
+    pub loc: CodeLocation,
+    pub info: TokenInfo,
 }
 
 impl Token {
-    fn new(loc: CodeLocation, data: TokenData) -> Self {
-        Self { loc, data }
+    fn new(loc: CodeLocation, info: TokenInfo) -> Self {
+        Self { loc, info }
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct CodeLocation {
-    ln: usize,
-    ch: usize,
+    pub ln: usize,
+    pub ch: usize,
 }
 
 #[derive(Debug)]
-pub enum TokenData {
+pub enum TokenInfo {
     End,
 
     // Literals
@@ -63,21 +61,25 @@ pub enum TokenData {
     XXXPrint,
 }
 
-struct Tokenizer<'file> {
-    source: Peekable<Chars<'file>>,
+pub struct Tokenizer<'file> {
+    source: VeryPeekable<Chars<'file>>,
     cur_loc: CodeLocation,
     previous_was_newline: bool,
     ended: bool,
 }
 
 impl<'file> Tokenizer<'file> {
-    fn new(file: &'file LoadedFile) -> Self {
+    pub(crate) fn new(file: &'file LoadedFile) -> Self {
         Self {
             source: file.source.chars().very_peekable(),
             cur_loc: CodeLocation { ln: 1, ch: 1 },
             previous_was_newline: true,
             ended: false,
         }
+    }
+
+    pub(crate) fn is_finished(&self) -> bool {
+        self.ended
     }
 
     fn is_ident_begin(c: char) -> bool {
@@ -89,7 +91,7 @@ impl<'file> Tokenizer<'file> {
     }
 
     fn peek_char(&mut self) -> char {
-        self.source.peek(0).map(|c| *c).unwrap_or_default()
+        self.source.peek(0).copied().unwrap_or_default()
     }
 
     fn next_char(&mut self) -> char {
@@ -107,18 +109,26 @@ impl<'file> Tokenizer<'file> {
             _ => self.cur_loc.ch += 1,
         }
 
-        return c;
+        c
     }
 
-    fn next_token(&mut self) -> Result<Token, &'static str> {
+    pub fn next_token(&mut self) -> Result<Token, &'static str> {
         self.skip_whitespace();
 
         let c = self.peek_char();
-        match c {
-            _ if c.is_ascii_digit() => self.tokenize_number(),
-            _ if Self::is_ident_begin(c) => Ok(self.tokenize_identifier_or_keyword()),
-            _ => self.tokenize_punctuation(),
+        let token = match c {
+            _ if c.is_ascii_digit() => self.tokenize_number()?,
+            _ if Self::is_ident_begin(c) => Ok(self.tokenize_identifier_or_keyword())?,
+            _ => self.tokenize_punctuation()?,
+        };
+
+        match token.info {
+            TokenInfo::Newline => self.previous_was_newline = true,
+            TokenInfo::End => self.ended = true,
+            _ => self.previous_was_newline = false,
         }
+
+        Ok(token)
     }
 
     fn skip_whitespace(&mut self) {
@@ -145,8 +155,6 @@ impl<'file> Tokenizer<'file> {
     }
 
     fn tokenize_number(&mut self) -> Result<Token, &'static str> {
-        dprintln!("PARSING NUMBER!");
-
         let tok_loc = self.cur_loc;
 
         let mut word = String::new();
@@ -154,7 +162,9 @@ impl<'file> Tokenizer<'file> {
             word.push(self.next_char());
         }
 
-        let data = if self.peek_char() == '.' && self.source.peek(1).filter(|c| c.is_ascii_digit()).is_some() {
+        let info = if self.peek_char() == '.'
+            && self.source.peek(1).filter(|c| c.is_ascii_digit()).is_some()
+        {
             word.push('.');
             _ = self.next_char();
 
@@ -163,31 +173,30 @@ impl<'file> Tokenizer<'file> {
             }
 
             let f = word.parse().map_err(|_| "Failed to parse number.")?;
-            TokenData::Float(f)
+            TokenInfo::Float(f)
         } else {
-            dprintln!("PARSING INT!");
             let n = word.parse().map_err(|_| "Failed to parse number.")?;
-            TokenData::Int(n)
+            TokenInfo::Int(n)
         };
 
-        return Ok(Token::new(tok_loc, data));
+        Ok(Token::new(tok_loc, info))
     }
 
     fn tokenize_identifier_or_keyword(&mut self) -> Token {
         let tok_loc = self.cur_loc;
 
         let mut word = String::new();
-        while Self::is_ident_cont(self.peek_char()){
+        while Self::is_ident_cont(self.peek_char()) {
             word.push(self.next_char());
         }
 
         match word.as_str() {
-            "import" => Token::new(tok_loc, TokenData::Import),
-            "let" => Token::new(tok_loc, TokenData::Let),
-            "mut" => Token::new(tok_loc, TokenData::Mut),
-            "fn" => Token::new(tok_loc, TokenData::Fn),
-            "XXXprint" => Token::new(tok_loc, TokenData::XXXPrint),
-            _ => Token::new(tok_loc, TokenData::Ident(word)),
+            "import" => Token::new(tok_loc, TokenInfo::Import),
+            "let" => Token::new(tok_loc, TokenInfo::Let),
+            "mut" => Token::new(tok_loc, TokenInfo::Mut),
+            "fn" => Token::new(tok_loc, TokenInfo::Fn),
+            "XXXprint" => Token::new(tok_loc, TokenInfo::XXXPrint),
+            _ => Token::new(tok_loc, TokenInfo::Ident(word)),
         }
     }
 
@@ -196,31 +205,28 @@ impl<'file> Tokenizer<'file> {
 
         let op = match self.next_char() {
             // Delimeters
-            '\0' => TokenData::End,
-            '\n' => TokenData::Newline,
-            ',' => TokenData::Comma,
-            ':' => TokenData::Colon,
-            '(' => TokenData::ParenOpen,
-            ')' => TokenData::ParenClose,
-            '{' => TokenData::CurlyOpen,
-            '}' => TokenData::CurlyClose,
-            '[' => TokenData::SqrBracketOpen,
-            ']' => TokenData::SqrBracketClose,
+            '\0' => TokenInfo::End,
+            '\n' => TokenInfo::Newline,
+            ',' => TokenInfo::Comma,
+            ':' => TokenInfo::Colon,
+            '(' => TokenInfo::ParenOpen,
+            ')' => TokenInfo::ParenClose,
+            '{' => TokenInfo::CurlyOpen,
+            '}' => TokenInfo::CurlyClose,
+            '[' => TokenInfo::SqrBracketOpen,
+            ']' => TokenInfo::SqrBracketClose,
 
             // Operators
-            '+' => TokenData::Plus,
-            '-' => TokenData::Dash,
-            '*' => TokenData::Star,
-            '/' => TokenData::Slash,
-            '%' => TokenData::Percent,
+            '+' => TokenInfo::Plus,
+            '-' => TokenInfo::Dash,
+            '*' => TokenInfo::Star,
+            '/' => TokenInfo::Slash,
+            '%' => TokenInfo::Percent,
 
-            c => {
-                dprintln!("Invalid operator = {:?}", c);
-                return Err("Invalid operator.");
-            }
+            _ => return Err("Invalid operator."),
         };
 
-        return Ok(Token::new(tok_loc, op));
+        Ok(Token::new(tok_loc, op))
     }
 }
 
@@ -233,15 +239,6 @@ impl<'file> Iterator for Tokenizer<'file> {
         }
 
         let token = self.next_token();
-        if let Ok(token) = &token {
-            match token.data {
-                TokenData::Newline => self.previous_was_newline = true,
-                TokenData::End => self.ended = true,
-                _ => self.previous_was_newline = false,
-            }
-        }
-
-        return Some(token);
+        Some(token)
     }
 }
-

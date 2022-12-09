@@ -1,14 +1,13 @@
-use debug_print::debug_println as dprintln;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
-
+mod ir;
 mod parsing;
 mod util;
-use parsing::tokenization;
 
-use crate::parsing::tokenization::tokenize_file;
+use debug_print::debug_println as dprintln;
+
+use std::{ffi::OsStr, path::Path};
+
+use crate::parsing::parsing::parse_file;
+use util::structures::LoadedFile;
 
 fn main() -> Result<(), &'static str> {
     let mut args = std::env::args().skip(1);
@@ -45,8 +44,8 @@ fn main() -> Result<(), &'static str> {
         let loaded_file = load_file(project_path)?;
         dprintln!("{:#?}", loaded_file);
 
-        let tokens = tokenize_file(&loaded_file);
-        dprintln!("{:#?}", tokens);
+        let parsed_file = parse_file(&loaded_file)?;
+        dprintln!("{:#?}", parsed_file.ast);
     } else {
         return Err("Given path is neither a file or a directory.");
     }
@@ -64,16 +63,4 @@ fn load_file<P: AsRef<Path>>(path: P) -> Result<LoadedFile, &'static str> {
             .map_err(|_| "Failed to canonicalize project path.")?,
         source,
     })
-}
-
-#[derive(Debug)]
-struct LoadedFile {
-    filepath: PathBuf,
-    source: String,
-}
-
-#[derive(Debug)]
-struct ParsedFile {
-    filepath: PathBuf,
-    ast: (),
 }

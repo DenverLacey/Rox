@@ -16,7 +16,10 @@ impl<I: Iterator> Iterator for VeryPeekable<I> {
 
 impl<I: Iterator> VeryPeekable<I> {
     pub fn new(inner: I) -> Self {
-        Self { inner, peeked: VecDeque::new() }
+        Self {
+            inner,
+            peeked: VecDeque::new(),
+        }
     }
 }
 
@@ -47,4 +50,3 @@ impl<I: Iterator + Sized> VeryPeekableIterExt for I {
         VeryPeekable::new(self)
     }
 }
-
