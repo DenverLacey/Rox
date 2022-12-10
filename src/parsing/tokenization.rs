@@ -1,11 +1,10 @@
+use std::collections::VecDeque;
 use std::str::Chars;
+
+use enum_tags::*;
 
 use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 use crate::util::structures::LoadedFile;
-
-pub(crate) fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
-    Tokenizer::new(file).collect()
-}
 
 #[derive(Debug)]
 pub struct Token {
@@ -17,6 +16,10 @@ impl Token {
     fn new(loc: CodeLocation, info: TokenInfo) -> Self {
         Self { loc, info }
     }
+
+    pub fn is_end(&self) -> bool {
+        self.info.tag() == TokenInfoTag::End
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -25,7 +28,7 @@ pub struct CodeLocation {
     pub ch: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Tag)]
 pub enum TokenInfo {
     End,
 
@@ -61,11 +64,64 @@ pub enum TokenInfo {
     XXXPrint,
 }
 
+impl TokenInfo {
+    pub const fn precedence(&self) -> TokenPrecedence {
+        match *self {
+            TokenInfo::End => TokenPrecedence::None,
+            TokenInfo::Ident(_) => TokenPrecedence::None,
+            TokenInfo::Int(_) => TokenPrecedence::None,
+            TokenInfo::Float(_) => TokenPrecedence::None,
+            TokenInfo::Newline => TokenPrecedence::None,
+            TokenInfo::Comma => TokenPrecedence::None,
+            TokenInfo::Colon => TokenPrecedence::Colon,
+            TokenInfo::ParenOpen => TokenPrecedence::Call,
+            TokenInfo::ParenClose => TokenPrecedence::None,
+            TokenInfo::CurlyOpen => TokenPrecedence::None,
+            TokenInfo::CurlyClose => TokenPrecedence::None,
+            TokenInfo::SqrBracketOpen => TokenPrecedence::Call,
+            TokenInfo::SqrBracketClose => TokenPrecedence::None,
+            TokenInfo::Plus => TokenPrecedence::Term,
+            TokenInfo::Dash => TokenPrecedence::Term,
+            TokenInfo::Star => TokenPrecedence::Factor,
+            TokenInfo::Slash => TokenPrecedence::Factor,
+            TokenInfo::Percent => TokenPrecedence::Factor,
+            TokenInfo::Import => TokenPrecedence::None,
+            TokenInfo::Let => TokenPrecedence::None,
+            TokenInfo::Mut => TokenPrecedence::None,
+            TokenInfo::Fn => TokenPrecedence::None,
+            TokenInfo::XXXPrint => TokenPrecedence::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub enum TokenPrecedence {
+    None,
+    Assignment, // = += -= *= /= &= etc.
+    Colon,      // :
+    Cast,       // as
+    Range,      // .. ...
+    Or,         // ||
+    And,        // &&
+    BitOr,      // |
+    Xor,        // ^
+    BitAnd,     // &
+    Equality,   // == !=
+    Comparison, // < > <= >=
+    Shift,      // << >>
+    Term,       // + -
+    Factor,     // * / %
+    Unary,      // ! ~
+    Call,       // . () []
+    Primary,
+}
+
 pub struct Tokenizer<'file> {
     source: VeryPeekable<Chars<'file>>,
     cur_loc: CodeLocation,
     previous_was_newline: bool,
     ended: bool,
+    peeked: VecDeque<Token>,
 }
 
 impl<'file> Tokenizer<'file> {
@@ -75,6 +131,7 @@ impl<'file> Tokenizer<'file> {
             cur_loc: CodeLocation { ln: 1, ch: 1 },
             previous_was_newline: true,
             ended: false,
+            peeked: VecDeque::new(),
         }
     }
 
@@ -112,7 +169,23 @@ impl<'file> Tokenizer<'file> {
         c
     }
 
-    pub fn next_token(&mut self) -> Result<Token, &'static str> {
+    pub fn peek(&mut self, n: usize) -> Result<&Token, &'static str> {
+        while self.peeked.len() <= n {
+            let token = self.next_no_peeking()?;
+            self.peeked.push_back(token);
+        }
+
+        Ok(&self.peeked[n])
+    }
+
+    pub fn next(&mut self) -> Result<Token, &'static str> {
+        self.peeked
+            .pop_front()
+            .map(|tok| Ok(tok))
+            .unwrap_or_else(|| self.next_no_peeking())
+    }
+
+    fn next_no_peeking(&mut self) -> Result<Token, &'static str> {
         self.skip_whitespace();
 
         let c = self.peek_char();
@@ -230,15 +303,3 @@ impl<'file> Tokenizer<'file> {
     }
 }
 
-impl<'file> Iterator for Tokenizer<'file> {
-    type Item = Result<Token, &'static str>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.ended {
-            return None;
-        }
-
-        let token = self.next_token();
-        Some(token)
-    }
-}

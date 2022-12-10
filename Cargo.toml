@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 debug_print = "1.0.0"
+enum-tags = "0.1.0"
+enum-tags-macros = "0.1.0"
+enum-tags-traits = "0.1.0"

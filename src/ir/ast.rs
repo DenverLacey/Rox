@@ -2,10 +2,10 @@ use crate::parsing::tokenization::Token;
 
 #[derive(Debug)]
 pub struct Ast {
-    token: Token,
-    scope: (),
-    typ: Option<()>,
-    info: AstInfo,
+    pub token: Token,
+    pub scope: (),
+    pub typ: Option<()>,
+    pub info: AstInfo,
 }
 
 #[derive(Debug)]
@@ -31,6 +31,7 @@ pub enum AstBinaryKind {
     Mul,
     Div,
     Mod,
+    Assign,
 }
 
 #[derive(Debug)]
