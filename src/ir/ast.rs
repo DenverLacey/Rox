@@ -32,6 +32,9 @@ pub enum AstBinaryKind {
     Div,
     Mod,
     Assign,
+    Call,
+    Subscript,
+    Param,
 }
 
 #[derive(Debug)]
@@ -44,12 +47,21 @@ pub enum AstBlockKind {
 
 #[derive(Debug)]
 pub struct AstInfoFn {
-    ident: Ast,
-    params: Ast,
-    body: Ast,
+    pub ident: Ast,
+    pub params: Ast,
+    pub body: Ast,
 }
 
 impl Ast {
+    pub fn new(token: Token, info: AstInfo) -> Self {
+        Self {
+            token,
+            scope: (),
+            typ: None,
+            info,
+        }
+    }
+
     pub fn new_literal(token: Token) -> Self {
         Self {
             token,

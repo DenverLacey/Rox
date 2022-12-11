@@ -54,6 +54,7 @@ pub enum TokenInfo {
     Star,
     Slash,
     Percent,
+    Bang,
 
     // Keywords
     Import,
@@ -85,6 +86,7 @@ impl TokenInfo {
             TokenInfo::Star => TokenPrecedence::Factor,
             TokenInfo::Slash => TokenPrecedence::Factor,
             TokenInfo::Percent => TokenPrecedence::Factor,
+            TokenInfo::Bang => TokenPrecedence::Unary,
             TokenInfo::Import => TokenPrecedence::None,
             TokenInfo::Let => TokenPrecedence::None,
             TokenInfo::Mut => TokenPrecedence::None,
@@ -295,6 +297,7 @@ impl<'file> Tokenizer<'file> {
             '*' => TokenInfo::Star,
             '/' => TokenInfo::Slash,
             '%' => TokenInfo::Percent,
+            '!' => TokenInfo::Bang,
 
             _ => return Err("Invalid operator."),
         };
@@ -302,4 +305,3 @@ impl<'file> Tokenizer<'file> {
         Ok(Token::new(tok_loc, op))
     }
 }
-
