@@ -6,6 +6,7 @@ use enum_tags::*;
 use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 use crate::util::structures::LoadedFile;
 
+#[allow(dead_code)]
 pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
     let mut t = Tokenizer::new(file);
     let mut tokens = vec![];
@@ -136,6 +137,45 @@ pub enum TokenPrecedence {
     Primary,
 }
 
+impl TryFrom<u8> for TokenPrecedence {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        let prec = match value {
+            0 => Self::None,
+            1 => Self::Assignment,
+            2 => Self::Colon,
+            3 => Self::Cast,
+            4 => Self::Range,
+            5 => Self::Or,
+            6 => Self::And,
+            7 => Self::BitOr,
+            8 => Self::Xor,
+            9 => Self::BitAnd,
+            10 => Self::Equality,
+            11 => Self::Comparison,
+            12 => Self::Shift,
+            13 => Self::Term,
+            14 => Self::Factor,
+            15 => Self::Unary,
+            16 => Self::Call,
+            17 => Self::Primary,
+            _ => return Err("value out of bounds for `TokenPrecedence`."),
+        };
+
+        Ok(prec)
+    }
+}
+
+impl TokenPrecedence {
+    pub fn next(self) -> Self {
+        let s = self as u8;
+        let p = Self::Primary as u8;
+        let n = std::cmp::min(p, s + 1);
+        n.try_into().expect("Guaranteed that `n` will always be a valid `TokenPrecedence`.")
+    }
+}
+
 pub struct Tokenizer<'file> {
     source: VeryPeekable<Chars<'file>>,
     cur_loc: CodeLocation,
@@ -205,7 +245,7 @@ impl<'file> Tokenizer<'file> {
     pub fn next(&mut self) -> Result<Token, &'static str> {
         self.peeked
             .pop_front()
-            .map(|tok| Ok(tok))
+            .map(Ok)
             .unwrap_or_else(|| self.next_no_peeking())
     }
 
@@ -238,7 +278,7 @@ impl<'file> Tokenizer<'file> {
                     if !self.previous_was_newline {
                         break;
                     } else {
-                        _ = self.next_char();
+                        self.next_char();
                     }
                 }
                 c if c.is_whitespace() => _ = self.next_char(),
@@ -259,7 +299,7 @@ impl<'file> Tokenizer<'file> {
             && self.source.peek(1).filter(|c| c.is_ascii_digit()).is_some()
         {
             word.push('.');
-            _ = self.next_char();
+            self.next_char();
 
             while self.peek_char().is_ascii_digit() {
                 word.push(self.next_char());

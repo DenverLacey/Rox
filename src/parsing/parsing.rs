@@ -61,7 +61,7 @@ impl<'file> Parser<'file> {
 
     fn match_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
         if self.check_token(kind)? {
-            _ = self.next_token().expect("Already peeked.");
+            self.next_token().expect("Already peeked.");
             return Ok(true);
         }
 
@@ -287,7 +287,7 @@ impl<'file> Parser<'file> {
         lhs: Box<Ast>,
     ) -> ParseResult {
         self.skip_newline()?;
-        let rhs = self.parse_precedence(prec)?;
+        let rhs = self.parse_precedence(prec.next())?;
         Ok(Ast::new_binary(kind, token, lhs, Box::new(rhs)))
     }
 

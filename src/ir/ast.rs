@@ -1,10 +1,13 @@
-use crate::parsing::tokenization::Token;
+use crate::{
+    parsing::tokenization::Token,
+    typing::value_type::Type,
+};
 
 #[derive(Debug)]
 pub struct Ast {
     pub token: Token,
     pub scope: (),
-    pub typ: Option<()>,
+    pub typ: Option<Type>,
     pub info: AstInfo,
 }
 
