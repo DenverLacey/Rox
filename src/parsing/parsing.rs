@@ -3,7 +3,10 @@ use enum_tags::TaggedEnum;
 use crate::{
     ir::ast::{Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstUnaryKind},
     parsing::tokenization::*,
-    util::structures::{LoadedFile, ParsedFile},
+    util::{
+        lformat,
+        structures::{LoadedFile, ParsedFile},
+    },
 };
 
 pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
@@ -11,9 +14,11 @@ pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
     let tokenizer = Tokenizer::new(file);
     let mut parser = Parser::new(tokenizer);
 
-    while !parser.tokenizer.is_finished() {
+    while !parser.peek_token(0)?.is_end() {
         let node = parser.parse_declaration()?;
         nodes.push(node);
+
+        parser.skip_newline()?;
     }
 
     Ok(ParsedFile {
@@ -185,7 +190,10 @@ impl<'file> Parser<'file> {
             _ => self.parse_expression()?,
         };
 
-        self.expect_token(TokenInfoTag::Newline, "Statements must be placed on their own line.")?;
+        self.expect_token(
+            TokenInfoTag::Newline,
+            "Statements must be placed on their own line.",
+        )?;
 
         Ok(node)
     }
@@ -197,14 +205,14 @@ impl<'file> Parser<'file> {
     fn parse_precedence(&mut self, prec: TokenPrecedence) -> ParseResult {
         let token = self.next_token()?;
         if token.is_end() {
-            return Err("Unterminated expression.");
+            return Err("Expected an expression.");
         }
 
         let mut previous = self.parse_prefix(token)?;
-        while prec > self.peek_token(0)?.info.precedence() {
+        while prec <= self.peek_token(0)?.info.precedence() {
             let token = self.next_token()?;
             if token.is_end() {
-                return Err("Unterminated expression.");
+                return Err("Incomplete expression.");
             }
 
             previous = self.parse_infix(token, previous)?;
@@ -229,7 +237,10 @@ impl<'file> Parser<'file> {
             TokenInfo::Bang => self.parse_unary(AstUnaryKind::Not, token),
             TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token),
             TokenInfo::XXXPrint => self.parse_unary(AstUnaryKind::XXXPrint, token),
-            _ => Err("Encountered a non-prefix token in prefix position."),
+            _ => Err(lformat!(
+                "Encountered a non-prefix token `{:?}` in prefix position.",
+                token.info
+            )),
         }
     }
 
@@ -258,7 +269,7 @@ impl<'file> Parser<'file> {
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
             }
-            _ => Err("Encountered a non-infix token in infix position."),
+            _ => Err(lformat!("Encountered a non-infix token `{:?}` in infix position.", token.info)),
         }
     }
 

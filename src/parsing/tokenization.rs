@@ -6,6 +6,24 @@ use enum_tags::*;
 use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 use crate::util::structures::LoadedFile;
 
+pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
+    let mut t = Tokenizer::new(file);
+    let mut tokens = vec![];
+
+    loop {
+        let token = t.next()?;
+        let end = token.is_end();
+
+        tokens.push(token);
+
+        if end {
+            break;
+        }
+    }
+
+    Ok(tokens)
+}
+
 #[derive(Debug)]
 pub struct Token {
     pub loc: CodeLocation,
@@ -137,8 +155,12 @@ impl<'file> Tokenizer<'file> {
         }
     }
 
-    pub(crate) fn is_finished(&self) -> bool {
-        self.ended
+    fn update_intertoken_state(&mut self, token: &Token) {
+        match token.info {
+            TokenInfo::Newline => self.previous_was_newline = true,
+            TokenInfo::End => self.ended = true,
+            _ => self.previous_was_newline = false,
+        }
     }
 
     fn is_ident_begin(c: char) -> bool {
@@ -193,15 +215,11 @@ impl<'file> Tokenizer<'file> {
         let c = self.peek_char();
         let token = match c {
             _ if c.is_ascii_digit() => self.tokenize_number()?,
-            _ if Self::is_ident_begin(c) => Ok(self.tokenize_identifier_or_keyword())?,
+            _ if Self::is_ident_begin(c) => self.tokenize_identifier_or_keyword(),
             _ => self.tokenize_punctuation()?,
         };
 
-        match token.info {
-            TokenInfo::Newline => self.previous_was_newline = true,
-            TokenInfo::End => self.ended = true,
-            _ => self.previous_was_newline = false,
-        }
+        self.update_intertoken_state(&token);
 
         Ok(token)
     }
