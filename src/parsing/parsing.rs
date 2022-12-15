@@ -1,7 +1,10 @@
 use enum_tags::TaggedEnum;
 
 use crate::{
-    ir::ast::{Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstUnaryKind},
+    ir::ast::{
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind,
+        VariableInitializer,
+    },
     parsing::tokenization::*,
     util::{
         lformat,
@@ -11,8 +14,7 @@ use crate::{
 
 pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
     let mut nodes = vec![];
-    let tokenizer = Tokenizer::new(file);
-    let mut parser = Parser::new(tokenizer);
+    let mut parser = Parser::new(Tokenizer::new(file));
 
     while !parser.peek_token(0)?.is_end() {
         let node = parser.parse_declaration()?;
@@ -26,7 +28,7 @@ pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
         ast: Ast::new_block(
             AstBlockKind::Program,
             Token {
-                loc: CodeLocation { ln: 1, ch: 1 },
+                loc: CodeLocation { ln: 0, ch: 0 },
                 info: TokenInfo::End,
             },
             nodes,
@@ -55,8 +57,25 @@ impl<'file> Parser<'file> {
         self.tokenizer.next()
     }
 
+    fn next_token_if_eq(&mut self, kind: TokenInfoTag) -> Result<Option<Token>, &'static str> {
+        if self.check_token(kind)? {
+            return Ok(Some(self.next_token().expect("Already peeked")));
+        }
+        Ok(None)
+    }
+
+    fn skip_newline(&mut self) -> Result<(), &'static str> {
+        self.match_token(TokenInfoTag::Newline)?;
+        Ok(())
+    }
+
     fn check_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
         self.peek_token(0).map(|tok| tok.info.tag() == kind)
+    }
+
+    fn skip_check_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+        self.skip_newline()?;
+        self.check_token(kind)
     }
 
     fn match_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
@@ -66,6 +85,11 @@ impl<'file> Parser<'file> {
         }
 
         Ok(false)
+    }
+
+    fn skip_match_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+        self.skip_newline()?;
+        self.match_token(kind)
     }
 
     fn expect_token(
@@ -80,9 +104,13 @@ impl<'file> Parser<'file> {
         Err(err)
     }
 
-    fn skip_newline(&mut self) -> Result<(), &'static str> {
-        self.match_token(TokenInfoTag::Newline)?;
-        Ok(())
+    fn skip_expect_token(
+        &mut self,
+        kind: TokenInfoTag,
+        err: &'static str,
+    ) -> Result<Token, &'static str> {
+        self.skip_newline()?;
+        self.expect_token(kind, err)
     }
 }
 
@@ -91,7 +119,7 @@ impl<'file> Parser<'file> {
         let token = self.peek_token(0)?;
         match token.info {
             TokenInfo::Fn => self.parse_fn_decl(),
-            TokenInfo::Let | TokenInfo::Mut => todo!(),
+            TokenInfo::Let | TokenInfo::Mut => self.parse_var_decl(),
             TokenInfo::Import => todo!(),
             _ => self.parse_statement_or_assignment(),
         }
@@ -103,7 +131,7 @@ impl<'file> Parser<'file> {
             "Expected `fn` keyword to begin function declaration.",
         )?;
 
-        let ident_tok = self.expect_token(
+        let ident_tok = self.skip_expect_token(
             TokenInfoTag::Ident,
             "Expected an identifier after `fn` keyword.",
         )?;
@@ -124,23 +152,23 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_params(&mut self) -> ParseResult {
-        let tok = self.expect_token(
+        let tok = self.skip_expect_token(
             TokenInfoTag::ParenOpen,
             "Expected `(` to begin function parameter list.",
         )?;
         let mut params = vec![];
 
         loop {
-            if self.check_token(TokenInfoTag::ParenClose)? {
+            if self.skip_check_token(TokenInfoTag::ParenClose)? {
                 break;
             }
 
-            let param_ident_tok = self.expect_token(
+            let param_ident_tok = self.skip_expect_token(
                 TokenInfoTag::Ident,
                 "Expected an identifier for function parameter.",
             )?;
             let param_ident = Ast::new_literal(param_ident_tok);
-            let colon_tok = self.expect_token(
+            let colon_tok = self.skip_expect_token(
                 TokenInfoTag::Colon,
                 "Expected `:` after function paramter name.",
             )?;
@@ -154,12 +182,14 @@ impl<'file> Parser<'file> {
 
             params.push(param);
 
-            if !self.match_token(TokenInfoTag::Comma)? || self.match_token(TokenInfoTag::End)? {
+            if !self.skip_match_token(TokenInfoTag::Comma)?
+                || self.match_token(TokenInfoTag::End)?
+            {
                 break;
             }
         }
 
-        self.expect_token(
+        self.skip_expect_token(
             TokenInfoTag::ParenClose,
             "Expected `)` to terminate function parameter list.",
         )?;
@@ -168,7 +198,69 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_var_decl(&mut self) -> ParseResult {
-        todo!()
+        let var_tok = self.next_token()?;
+        assert!(
+            matches!(var_tok.info, TokenInfo::Let | TokenInfo::Mut),
+            "Expected variable declaration to begin with either a `let` or `mut` keyword."
+        );
+
+        let ident_tok = self.expect_token(
+            TokenInfoTag::Ident,
+            "Expected an identifier after `let` or `mut`.",
+        )?; // @TODO: Improve error message
+        let ident_or_idents = if self.check_token(TokenInfoTag::Comma)? {
+            let ident = Ast::new_literal(ident_tok);
+            let mut idents = vec![ident];
+
+            while self.next_token_if_eq(TokenInfoTag::Comma)?.is_some() {
+                let ident_tok = self.expect_token(
+                    TokenInfoTag::Ident,
+                    "Expected an identifier after `,` in variable declaration.",
+                )?;
+                let ident = Ast::new_literal(ident_tok);
+                idents.push(ident);
+            }
+
+            Ast::new_block(
+                AstBlockKind::VarDeclTargets,
+                idents[0].token.clone(),
+                idents,
+            )
+        } else {
+            Ast::new_literal(ident_tok)
+        };
+
+        let type_constraint = if self.match_token(TokenInfoTag::Colon)? {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        let init_expr = if self.match_token(TokenInfoTag::Equal)? {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        let initializer =
+            match (type_constraint, init_expr) {
+                (Some(tc), Some(ie)) => VariableInitializer::TypeAndExpr(tc, ie),
+                (None, Some(ie)) => VariableInitializer::Expr(ie),
+                (Some(tc), None) => VariableInitializer::Type(tc),
+                _ => return Err(
+                    "Variable declarations must declare a variables type, inital value or both.",
+                ),
+            };
+
+        let mutable = matches!(var_tok.info, TokenInfo::Mut);
+        Ok(Ast::new(
+            var_tok,
+            AstInfo::Var(Box::new(AstInfoVar {
+                mutable,
+                targets: ident_or_idents,
+                initializer,
+            })),
+        ))
     }
 
     fn parse_statement_or_assignment(&mut self) -> ParseResult {
@@ -269,7 +361,10 @@ impl<'file> Parser<'file> {
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
             }
-            _ => Err(lformat!("Encountered a non-infix token `{:?}` in infix position.", token.info)),
+            _ => Err(lformat!(
+                "Encountered a non-infix token `{:?}` in infix position.",
+                token.info
+            )),
         }
     }
 
@@ -295,8 +390,7 @@ impl<'file> Parser<'file> {
         let token = self.next_token()?;
 
         let mut nodes = vec![];
-        while !self.match_token(terminator)? && !self.check_token(TokenInfoTag::End)? {
-            self.skip_newline()?;
+        while !self.skip_match_token(terminator)? && !self.check_token(TokenInfoTag::End)? {
             let node = self.parse_declaration()?;
             nodes.push(node);
         }

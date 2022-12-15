@@ -1,4 +1,6 @@
 fn main() {
   XXXprint 1.5
+  let x = 1
+  let y, z = 5
 }
 

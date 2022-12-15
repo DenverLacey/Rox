@@ -1,12 +1,9 @@
-use crate::{
-    parsing::tokenization::Token,
-    typing::value_type::Type,
-};
+use crate::{parsing::tokenization::Token, typing::value_type::Type, util::structures::ScopeIndex};
 
 #[derive(Debug)]
 pub struct Ast {
     pub token: Token,
-    pub scope: (),
+    pub scope: ScopeIndex,
     pub typ: Option<Type>,
     pub info: AstInfo,
 }
@@ -18,6 +15,7 @@ pub enum AstInfo {
     Binary(AstBinaryKind, Box<Ast>, Box<Ast>),
     Block(AstBlockKind, Vec<Ast>),
     Fn(Box<AstInfoFn>),
+    Var(Box<AstInfoVar>),
 }
 
 #[derive(Debug)]
@@ -46,6 +44,7 @@ pub enum AstBlockKind {
     Block,
     Params,
     Args,
+    VarDeclTargets,
 }
 
 #[derive(Debug)]
@@ -55,11 +54,25 @@ pub struct AstInfoFn {
     pub body: Ast,
 }
 
+#[derive(Debug)]
+pub struct AstInfoVar {
+    pub mutable: bool,
+    pub targets: Ast,
+    pub initializer: VariableInitializer,
+}
+
+#[derive(Debug)]
+pub enum VariableInitializer {
+    TypeAndExpr(Ast, Ast),
+    Type(Ast),
+    Expr(Ast),
+}
+
 impl Ast {
     pub fn new(token: Token, info: AstInfo) -> Self {
         Self {
             token,
-            scope: (),
+            scope: ScopeIndex(0),
             typ: None,
             info,
         }
@@ -68,7 +81,7 @@ impl Ast {
     pub fn new_literal(token: Token) -> Self {
         Self {
             token,
-            scope: (),
+            scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Literal,
         }
@@ -77,7 +90,7 @@ impl Ast {
     pub fn new_unary(kind: AstUnaryKind, token: Token, sub_expression: Box<Ast>) -> Self {
         Self {
             token,
-            scope: (),
+            scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Unary(kind, sub_expression),
         }
@@ -86,7 +99,7 @@ impl Ast {
     pub fn new_binary(kind: AstBinaryKind, token: Token, lhs: Box<Ast>, rhs: Box<Ast>) -> Self {
         Self {
             token,
-            scope: (),
+            scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Binary(kind, lhs, rhs),
         }
@@ -95,7 +108,7 @@ impl Ast {
     pub fn new_block(kind: AstBlockKind, token: Token, nodes: Vec<Ast>) -> Self {
         Self {
             token,
-            scope: (),
+            scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Block(kind, nodes),
         }

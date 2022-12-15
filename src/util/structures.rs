@@ -1,4 +1,4 @@
-use std::{path::PathBuf, collections::HashMap};
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::{ir::ast::Ast, typing::value_type::Type};
 
@@ -14,10 +14,12 @@ pub struct ParsedFile {
     pub ast: Ast,
 }
 
-pub type ScopeIndex = usize;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ScopeIndex(pub usize);
 
 pub struct Scope {
     pub parent: Option<ScopeIndex>,
+    // pub children: Vec<ScopeIndex>,
     pub bindings: HashMap<String, ScopeBinding>,
 }
 
@@ -31,7 +33,8 @@ pub struct VariableBinding {
     pub typ: Type,
 }
 
-pub type FuncID = usize;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FuncID(pub usize);
 
 pub struct FunctionBinding {
     pub id: FuncID,
@@ -39,7 +42,8 @@ pub struct FunctionBinding {
 }
 
 pub struct FunctionInfo {
+    pub id: FuncID,
     pub name: String,
     pub typ: Type,
     pub code: Box<[u8]>,
-} 
+}

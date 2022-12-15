@@ -1,7 +1,7 @@
 mod ir;
 mod parsing;
-mod util;
 mod typing;
+mod util;
 
 use debug_print::debug_println as dprintln;
 

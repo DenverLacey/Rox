@@ -25,7 +25,7 @@ pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
     Ok(tokens)
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub loc: CodeLocation,
     pub info: TokenInfo,
@@ -47,7 +47,7 @@ pub struct CodeLocation {
     pub ch: usize,
 }
 
-#[derive(Debug, Tag)]
+#[derive(Clone, Debug, Tag)]
 pub enum TokenInfo {
     End,
 
@@ -74,6 +74,7 @@ pub enum TokenInfo {
     Slash,
     Percent,
     Bang,
+    Equal,
 
     // Keywords
     Import,
@@ -106,6 +107,7 @@ impl TokenInfo {
             TokenInfo::Slash => TokenPrecedence::Factor,
             TokenInfo::Percent => TokenPrecedence::Factor,
             TokenInfo::Bang => TokenPrecedence::Unary,
+            TokenInfo::Equal => TokenPrecedence::Assignment,
             TokenInfo::Import => TokenPrecedence::None,
             TokenInfo::Let => TokenPrecedence::None,
             TokenInfo::Mut => TokenPrecedence::None,
@@ -172,7 +174,8 @@ impl TokenPrecedence {
         let s = self as u8;
         let p = Self::Primary as u8;
         let n = std::cmp::min(p, s + 1);
-        n.try_into().expect("Guaranteed that `n` will always be a valid `TokenPrecedence`.")
+        n.try_into()
+            .expect("Guaranteed that `n` will always be a valid `TokenPrecedence`.")
     }
 }
 
@@ -356,6 +359,7 @@ impl<'file> Tokenizer<'file> {
             '/' => TokenInfo::Slash,
             '%' => TokenInfo::Percent,
             '!' => TokenInfo::Bang,
+            '=' => TokenInfo::Equal,
 
             _ => return Err("Invalid operator."),
         };
