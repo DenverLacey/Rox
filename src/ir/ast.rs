@@ -42,6 +42,7 @@ pub enum AstBinaryKind {
 pub enum AstBlockKind {
     Program,
     Block,
+    Comma,
     Params,
     Args,
     VarDeclTargets,

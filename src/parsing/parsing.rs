@@ -237,7 +237,12 @@ impl<'file> Parser<'file> {
         };
 
         let init_expr = if self.match_token(TokenInfoTag::Equal)? {
-            Some(self.parse_expression()?)
+            let expr = self.parse_expression()?;
+            if self.match_token(TokenInfoTag::Comma)? {
+                Some(self.parse_comma_separated_expressions(AstBlockKind::Comma, Some(expr))?)
+            } else {
+                Some(expr)
+            }
         } else {
             None
         };
@@ -361,6 +366,9 @@ impl<'file> Parser<'file> {
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
             }
+            TokenInfo::Equal => {
+                self.parse_binary(AstBinaryKind::Assign, token, prec, Box::new(previous))
+            }
             _ => Err(lformat!(
                 "Encountered a non-infix token `{:?}` in infix position.",
                 token.info
@@ -396,5 +404,28 @@ impl<'file> Parser<'file> {
         }
 
         Ok(Ast::new_block(kind, token, nodes))
+    }
+
+    fn parse_comma_separated_expressions(&mut self, kind: AstBlockKind, initial: Option<Ast>) -> ParseResult {
+        let mut exprs = vec![];
+        let token: Token;
+
+        if let Some(initial) = initial {
+            token = initial.token.clone();
+            exprs.push(initial)
+        } else {
+            token = self.peek_token(0)?.clone();
+        }
+
+        while !self.skip_check_token(TokenInfoTag::End)? {
+            let expr = self.parse_expression()?;
+            exprs.push(expr);
+
+            if !self.skip_match_token(TokenInfoTag::Comma)? {
+                break;
+            }
+        }
+
+        Ok(Ast::new_block(kind, token, exprs))
     }
 }
