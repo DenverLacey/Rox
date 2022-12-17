@@ -25,7 +25,7 @@ pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
     Ok(tokens)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Token {
     pub loc: CodeLocation,
     pub info: TokenInfo,
@@ -41,7 +41,7 @@ impl Token {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CodeLocation {
     pub ln: usize,
     pub ch: usize,
@@ -114,6 +114,12 @@ impl TokenInfo {
             TokenInfo::Fn => TokenPrecedence::None,
             TokenInfo::XXXPrint => TokenPrecedence::None,
         }
+    }
+}
+
+impl Default for TokenInfo {
+    fn default() -> Self {
+        Self::End
     }
 }
 

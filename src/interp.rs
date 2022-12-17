@@ -86,6 +86,7 @@ impl Interpreter {
             }
         } else if path.is_file() {
             self.load_and_parse_file(path)?;
+            dprintln!("[INFO] AST of parsed file {:?}\n{:#?}", path, self.parsed_files[0].ast);
         } else {
             return Err("Given path is neither a file or a directory.");
         }

@@ -79,6 +79,10 @@ impl Ast {
         }
     }
 
+    pub fn new_program(nodes: Vec<Ast>) -> Self {
+        Ast::new_block(AstBlockKind::Program, Token::default(), nodes)
+    }
+
     pub fn new_literal(token: Token) -> Self {
         Self {
             token,

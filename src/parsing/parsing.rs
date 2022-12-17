@@ -23,14 +23,7 @@ pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
 
     Ok(ParsedFile {
         filepath: file.filepath.clone(),
-        ast: Ast::new_block(
-            AstBlockKind::Program,
-            Token {
-                loc: CodeLocation { ln: 0, ch: 0 },
-                info: TokenInfo::End,
-            },
-            nodes,
-        ),
+        ast: Ast::new_program(nodes),
     })
 }
 
@@ -237,7 +230,7 @@ impl<'file> Parser<'file> {
         let init_expr = if self.match_token(TokenInfoTag::Equal)? {
             let expr = self.parse_expression()?;
             if self.match_token(TokenInfoTag::Comma)? {
-                Some(self.parse_comma_separated_expressions(AstBlockKind::Comma, Some(expr))?)
+                Some(self.parse_comma_separated_expressions(AstBlockKind::Comma, TokenInfoTag::Newline, Some(expr))?)
             } else {
                 Some(expr)
             }
@@ -344,10 +337,14 @@ impl<'file> Parser<'file> {
         match token.info {
             TokenInfo::Colon => todo!(),
             TokenInfo::ParenOpen => {
-                self.parse_binary(AstBinaryKind::Call, token, prec, Box::new(previous))
+                let args = self.parse_comma_separated_expressions(AstBlockKind::Args, TokenInfoTag::ParenClose, None)?;
+                self.expect_token(TokenInfoTag::ParenClose, "Expected `)` after argument list of function call.")?;
+                Ok(Ast::new_binary(AstBinaryKind::Call, token, Box::new(previous), Box::new(args)))
             }
             TokenInfo::SqrBracketOpen => {
-                self.parse_binary(AstBinaryKind::Subscript, token, prec, Box::new(previous))
+                let sub = self.parse_binary(AstBinaryKind::Subscript, token, prec, Box::new(previous))?;
+                self.expect_token(TokenInfoTag::SqrBracketClose, "Expected `]` to terminate subscript operation.")?;
+                Ok(sub)
             }
             TokenInfo::Plus => {
                 self.parse_binary(AstBinaryKind::Add, token, prec, Box::new(previous))
@@ -404,7 +401,7 @@ impl<'file> Parser<'file> {
         Ok(Ast::new_block(kind, token, nodes))
     }
 
-    fn parse_comma_separated_expressions(&mut self, kind: AstBlockKind, initial: Option<Ast>) -> ParseResult {
+    fn parse_comma_separated_expressions(&mut self, kind: AstBlockKind, terminator: TokenInfoTag, initial: Option<Ast>) -> ParseResult {
         let mut exprs = vec![];
         let token: Token;
 
@@ -415,7 +412,7 @@ impl<'file> Parser<'file> {
             token = self.peek_token(0)?.clone();
         }
 
-        while !self.skip_check_token(TokenInfoTag::End)? {
+        while !self.skip_check_token(terminator)? && !self.check_token(TokenInfoTag::End)? {
             let expr = self.parse_expression()?;
             exprs.push(expr);
 
