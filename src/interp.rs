@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::OsStr, path::{PathBuf, Path}};
 
 use debug_print::debug_println as dprintln;
 
-use crate::{parsing::parsing::parse_file, ir::ast::{Ast, AstInfo, AstBlockKind}, typing::value_type::{Type, CompositeType}};
+use crate::{parsing::parsing::parse_file, ir::ast::{Ast, AstInfo, AstBlockKind, VariableInitializer}, typing::value_type::{Type, CompositeType}};
 
 #[derive(Default)]
 pub struct Interpreter {
@@ -28,18 +28,33 @@ pub struct ParsedFile {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ScopeIndex(pub usize);
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Scope {
     pub parent: Option<ScopeIndex>,
     // pub children: Vec<ScopeIndex>,
     pub bindings: HashMap<String, ScopeBinding>,
 }
 
+impl Scope {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_parent(parent: ScopeIndex) -> Self {
+        Self {
+            parent: Some(parent),
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum ScopeBinding {
     Var(VariableBinding),
     Func(FunctionBinding),
 }
 
+#[derive(Debug)]
 pub struct VariableBinding {
     pub is_mut: bool,
     pub typ: Type,
@@ -48,11 +63,13 @@ pub struct VariableBinding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FuncID(pub usize);
 
+#[derive(Debug)]
 pub struct FunctionBinding {
     pub id: FuncID,
     pub typ: Type,
 }
 
+#[derive(Debug)]
 pub struct FunctionInfo {
     pub id: FuncID,
     pub name: String,
@@ -68,6 +85,14 @@ impl Interpreter {
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         self.parse_program(path)?;
         self.establish_scopes()?;
+
+        self.parsed_files.iter().for_each(|f| {
+            dprintln!("AST of {:?}:\n{:#?}\n", f.filepath, f.ast);
+        });
+
+        self.scopes.iter().enumerate().for_each(|(i, s)| {
+            dprintln!("[{}]: {:?}", i, s);
+        });
 
         Ok(())
     }
@@ -100,7 +125,6 @@ impl Interpreter {
             }
         } else if path.is_file() {
             self.load_and_parse_file(path)?;
-            dprintln!("[INFO] AST of parsed file {:?}\n{:?}", path, self.parsed_files[0].ast);
         } else {
             return Err("Given path is neither a file or a directory.");
         }
@@ -136,14 +160,55 @@ impl Interpreter {
     }
 
     fn establish_scope_for_file(scopes: &mut Vec<Scope>, nodes: &mut Vec<Ast>) -> Result<(), &'static str> {
-        let global_scope = ScopeIndex(scopes.len());
-        scopes.push(Scope::default());
+        let file_scope = ScopeIndex(scopes.len());
+        scopes.push(Scope::new());
 
+        Self::establish_scope_for_nodes(scopes, file_scope, nodes)
+    }
+
+    fn establish_scope_for_nodes(scopes: &mut Vec<Scope>, start: ScopeIndex, nodes: &mut Vec<Ast>) -> Result<(), &'static str> {
         for node in nodes {
-            node.scope = global_scope;
+            Self::establish_scope_for_node(scopes, start, node)?;
+        }
 
-            match node.info {
-                _ => todo!(),
+        Ok(())
+    }
+
+    fn establish_scope_for_node(scopes: &mut Vec<Scope>, start: ScopeIndex, node: &mut Ast) -> Result<(), &'static str> {
+        node.scope = start;
+
+        match &mut node.info {
+            AstInfo::Literal => {}
+            AstInfo::Unary(_, sub_node) => Self::establish_scope_for_node(scopes, start, sub_node)?,
+            AstInfo::Binary(_, lhs, rhs) => {
+                Self::establish_scope_for_node(scopes, start, lhs.as_mut())?;
+                Self::establish_scope_for_node(scopes, start, rhs.as_mut())?;
+            }
+            AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
+                let new_scope = ScopeIndex(scopes.len());
+                scopes.push(Scope::with_parent(start));
+
+                Self::establish_scope_for_nodes(scopes, new_scope, sub_nodes)?;
+            }
+            AstInfo::Block(_, sub_nodes) => Self::establish_scope_for_nodes(scopes, start, sub_nodes)?,
+            AstInfo::Fn(info) => {
+                let func_scope = ScopeIndex(scopes.len());
+                scopes.push(Scope::with_parent(start));
+
+                Self::establish_scope_for_node(scopes, func_scope, &mut info.params)?;
+                Self::establish_scope_for_node(scopes, func_scope, &mut info.body)?;
+            }
+            AstInfo::Var(info) => {
+                // @TODO: targets
+
+                match &mut info.initializer {
+                    VariableInitializer::TypeAndExpr(typ, expr) => {
+                        Self::establish_scope_for_node(scopes, start, typ)?;
+                        Self::establish_scope_for_node(scopes, start, expr)?;
+                    }
+                    VariableInitializer::Type(typ) => Self::establish_scope_for_node(scopes, start, typ)?,
+                    VariableInitializer::Expr(expr) => Self::establish_scope_for_node(scopes, start, expr)?,
+                }
             }
         }
 
