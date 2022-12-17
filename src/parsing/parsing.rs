@@ -6,10 +6,8 @@ use crate::{
         VariableInitializer,
     },
     parsing::tokenization::*,
-    util::{
-        lformat,
-        structures::{LoadedFile, ParsedFile},
-    },
+    interp::{LoadedFile, ParsedFile},
+    util::lformat,
 };
 
 pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {

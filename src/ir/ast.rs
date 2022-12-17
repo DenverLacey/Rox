@@ -1,4 +1,4 @@
-use crate::{parsing::tokenization::Token, typing::value_type::Type, util::structures::ScopeIndex};
+use crate::{parsing::tokenization::Token, typing::value_type::Type, interp::ScopeIndex};
 
 #[derive(Debug)]
 pub struct Ast {

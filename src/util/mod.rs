@@ -1,5 +1,4 @@
 pub mod iter;
-pub mod structures;
 
 macro_rules! lformat {
     ($fmt:literal, $($args:expr),*) => {{

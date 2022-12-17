@@ -4,7 +4,7 @@ use std::str::Chars;
 use enum_tags::*;
 
 use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
-use crate::util::structures::LoadedFile;
+use crate::interp::LoadedFile;
 
 #[allow(dead_code)]
 pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
