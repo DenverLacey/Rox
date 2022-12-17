@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::OsStr, path::{PathBuf, Path}};
 
 use debug_print::debug_println as dprintln;
 
-use crate::{parsing::parsing::parse_file, ir::ast::Ast, typing::value_type::{Type, CompositeType}};
+use crate::{parsing::parsing::parse_file, ir::ast::{Ast, AstInfo, AstBlockKind}, typing::value_type::{Type, CompositeType}};
 
 #[derive(Default)]
 pub struct Interpreter {
@@ -28,6 +28,7 @@ pub struct ParsedFile {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ScopeIndex(pub usize);
 
+#[derive(Default)]
 pub struct Scope {
     pub parent: Option<ScopeIndex>,
     // pub children: Vec<ScopeIndex>,
@@ -65,6 +66,19 @@ impl Interpreter {
     }
 
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
+        self.parse_program(path)?;
+        self.establish_scopes()?;
+
+        Ok(())
+    }
+
+    pub fn execute_program(&mut self) -> Result<(), &'static str> {
+        todo!()
+    }
+}
+
+impl Interpreter {
+    fn parse_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         let path = path.as_ref();
 
         if !path.exists() {
@@ -86,7 +100,7 @@ impl Interpreter {
             }
         } else if path.is_file() {
             self.load_and_parse_file(path)?;
-            dprintln!("[INFO] AST of parsed file {:?}\n{:#?}", path, self.parsed_files[0].ast);
+            dprintln!("[INFO] AST of parsed file {:?}\n{:?}", path, self.parsed_files[0].ast);
         } else {
             return Err("Given path is neither a file or a directory.");
         }
@@ -105,6 +119,33 @@ impl Interpreter {
 
         self.loaded_files.push(loaded_file);
         self.parsed_files.push(parsed_file);
+
+        Ok(())
+    }
+
+    fn establish_scopes(&mut self) -> Result<(), &'static str> {
+        for file in &mut self.parsed_files {
+            if let Ast { token: _, scope: _, typ: _, info: AstInfo::Block(AstBlockKind::Program, nodes) } = &mut file.ast {
+                Self::establish_scope_for_file(&mut self.scopes, nodes)?;
+            } else {
+                return Err("[INTERNAL ERR] Ast node of parsed file not a Program ndoe.");
+            }
+        }
+
+        Ok(())
+    }
+
+    fn establish_scope_for_file(scopes: &mut Vec<Scope>, nodes: &mut Vec<Ast>) -> Result<(), &'static str> {
+        let global_scope = ScopeIndex(scopes.len());
+        scopes.push(Scope::default());
+
+        for node in nodes {
+            node.scope = global_scope;
+
+            match node.info {
+                _ => todo!(),
+            }
+        }
 
         Ok(())
     }
