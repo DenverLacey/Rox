@@ -1,8 +1,16 @@
-use std::{collections::HashMap, ffi::OsStr, path::{PathBuf, Path}};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use debug_print::debug_println as dprintln;
 
-use crate::{parsing::parsing::parse_file, ir::ast::{Ast, AstInfo, AstBlockKind, VariableInitializer}, typing::value_type::{Type, CompositeType}};
+use crate::{
+    canon::scoping::{FuncID, Scope, Scoper},
+    ir::ast::{Ast, AstBlockKind, AstInfo},
+    parsing::parsing::parse_file,
+    typing::value_type::{CompositeType, Type},
+};
 
 #[derive(Default)]
 pub struct Interpreter {
@@ -23,50 +31,6 @@ pub struct LoadedFile {
 pub struct ParsedFile {
     pub filepath: PathBuf,
     pub ast: Ast,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ScopeIndex(pub usize);
-
-#[derive(Debug, Default)]
-pub struct Scope {
-    pub parent: Option<ScopeIndex>,
-    // pub children: Vec<ScopeIndex>,
-    pub bindings: HashMap<String, ScopeBinding>,
-}
-
-impl Scope {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_parent(parent: ScopeIndex) -> Self {
-        Self {
-            parent: Some(parent),
-            ..Default::default()
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum ScopeBinding {
-    Var(VariableBinding),
-    Func(FunctionBinding),
-}
-
-#[derive(Debug)]
-pub struct VariableBinding {
-    pub is_mut: bool,
-    pub typ: Type,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FuncID(pub usize);
-
-#[derive(Debug)]
-pub struct FunctionBinding {
-    pub id: FuncID,
-    pub typ: Type,
 }
 
 #[derive(Debug)]
@@ -148,67 +112,19 @@ impl Interpreter {
     }
 
     fn establish_scopes(&mut self) -> Result<(), &'static str> {
+        let mut scoper = Scoper::new(&mut self.scopes);
+
         for file in &mut self.parsed_files {
-            if let Ast { token: _, scope: _, typ: _, info: AstInfo::Block(AstBlockKind::Program, nodes) } = &mut file.ast {
-                Self::establish_scope_for_file(&mut self.scopes, nodes)?;
+            if let Ast {
+                token: _,
+                scope: _,
+                typ: _,
+                info: AstInfo::Block(AstBlockKind::Program, nodes),
+            } = &mut file.ast
+            {
+                scoper.establish_scope_for_file(nodes)?;
             } else {
-                return Err("[INTERNAL ERR] Ast node of parsed file not a Program ndoe.");
-            }
-        }
-
-        Ok(())
-    }
-
-    fn establish_scope_for_file(scopes: &mut Vec<Scope>, nodes: &mut Vec<Ast>) -> Result<(), &'static str> {
-        let file_scope = ScopeIndex(scopes.len());
-        scopes.push(Scope::new());
-
-        Self::establish_scope_for_nodes(scopes, file_scope, nodes)
-    }
-
-    fn establish_scope_for_nodes(scopes: &mut Vec<Scope>, start: ScopeIndex, nodes: &mut Vec<Ast>) -> Result<(), &'static str> {
-        for node in nodes {
-            Self::establish_scope_for_node(scopes, start, node)?;
-        }
-
-        Ok(())
-    }
-
-    fn establish_scope_for_node(scopes: &mut Vec<Scope>, start: ScopeIndex, node: &mut Ast) -> Result<(), &'static str> {
-        node.scope = start;
-
-        match &mut node.info {
-            AstInfo::Literal => {}
-            AstInfo::Unary(_, sub_node) => Self::establish_scope_for_node(scopes, start, sub_node)?,
-            AstInfo::Binary(_, lhs, rhs) => {
-                Self::establish_scope_for_node(scopes, start, lhs.as_mut())?;
-                Self::establish_scope_for_node(scopes, start, rhs.as_mut())?;
-            }
-            AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
-                let new_scope = ScopeIndex(scopes.len());
-                scopes.push(Scope::with_parent(start));
-
-                Self::establish_scope_for_nodes(scopes, new_scope, sub_nodes)?;
-            }
-            AstInfo::Block(_, sub_nodes) => Self::establish_scope_for_nodes(scopes, start, sub_nodes)?,
-            AstInfo::Fn(info) => {
-                let func_scope = ScopeIndex(scopes.len());
-                scopes.push(Scope::with_parent(start));
-
-                Self::establish_scope_for_node(scopes, func_scope, &mut info.params)?;
-                Self::establish_scope_for_node(scopes, func_scope, &mut info.body)?;
-            }
-            AstInfo::Var(info) => {
-                // @TODO: targets
-
-                match &mut info.initializer {
-                    VariableInitializer::TypeAndExpr(typ, expr) => {
-                        Self::establish_scope_for_node(scopes, start, typ)?;
-                        Self::establish_scope_for_node(scopes, start, expr)?;
-                    }
-                    VariableInitializer::Type(typ) => Self::establish_scope_for_node(scopes, start, typ)?,
-                    VariableInitializer::Expr(expr) => Self::establish_scope_for_node(scopes, start, expr)?,
-                }
+                return Err("[ERR] Ast node of parsed file not a Program ndoe.");
             }
         }
 

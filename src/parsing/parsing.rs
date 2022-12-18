@@ -1,12 +1,12 @@
 use enum_tags::TaggedEnum;
 
 use crate::{
+    interp::{LoadedFile, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind,
         VariableInitializer,
     },
     parsing::tokenization::*,
-    interp::{LoadedFile, ParsedFile},
     util::lformat,
 };
 
@@ -230,7 +230,11 @@ impl<'file> Parser<'file> {
         let init_expr = if self.match_token(TokenInfoTag::Equal)? {
             let expr = self.parse_expression()?;
             if self.match_token(TokenInfoTag::Comma)? {
-                Some(self.parse_comma_separated_expressions(AstBlockKind::Comma, TokenInfoTag::Newline, Some(expr))?)
+                Some(self.parse_comma_separated_expressions(
+                    AstBlockKind::Comma,
+                    TokenInfoTag::Newline,
+                    Some(expr),
+                )?)
             } else {
                 Some(expr)
             }
@@ -337,13 +341,29 @@ impl<'file> Parser<'file> {
         match token.info {
             TokenInfo::Colon => todo!(),
             TokenInfo::ParenOpen => {
-                let args = self.parse_comma_separated_expressions(AstBlockKind::Args, TokenInfoTag::ParenClose, None)?;
-                self.expect_token(TokenInfoTag::ParenClose, "Expected `)` after argument list of function call.")?;
-                Ok(Ast::new_binary(AstBinaryKind::Call, token, Box::new(previous), Box::new(args)))
+                let args = self.parse_comma_separated_expressions(
+                    AstBlockKind::Args,
+                    TokenInfoTag::ParenClose,
+                    None,
+                )?;
+                self.expect_token(
+                    TokenInfoTag::ParenClose,
+                    "Expected `)` after argument list of function call.",
+                )?;
+                Ok(Ast::new_binary(
+                    AstBinaryKind::Call,
+                    token,
+                    Box::new(previous),
+                    Box::new(args),
+                ))
             }
             TokenInfo::SqrBracketOpen => {
-                let sub = self.parse_binary(AstBinaryKind::Subscript, token, prec, Box::new(previous))?;
-                self.expect_token(TokenInfoTag::SqrBracketClose, "Expected `]` to terminate subscript operation.")?;
+                let sub =
+                    self.parse_binary(AstBinaryKind::Subscript, token, prec, Box::new(previous))?;
+                self.expect_token(
+                    TokenInfoTag::SqrBracketClose,
+                    "Expected `]` to terminate subscript operation.",
+                )?;
                 Ok(sub)
             }
             TokenInfo::Plus => {
@@ -401,7 +421,12 @@ impl<'file> Parser<'file> {
         Ok(Ast::new_block(kind, token, nodes))
     }
 
-    fn parse_comma_separated_expressions(&mut self, kind: AstBlockKind, terminator: TokenInfoTag, initial: Option<Ast>) -> ParseResult {
+    fn parse_comma_separated_expressions(
+        &mut self,
+        kind: AstBlockKind,
+        terminator: TokenInfoTag,
+        initial: Option<Ast>,
+    ) -> ParseResult {
         let mut exprs = vec![];
         let token: Token;
 

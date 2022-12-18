@@ -3,8 +3,8 @@ use std::str::Chars;
 
 use enum_tags::*;
 
-use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 use crate::interp::LoadedFile;
+use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 
 #[allow(dead_code)]
 pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
