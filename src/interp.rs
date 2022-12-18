@@ -50,13 +50,15 @@ impl Interpreter {
         self.parse_program(path)?;
         self.establish_scopes()?;
 
-        self.parsed_files.iter().for_each(|f| {
-            dprintln!("AST of {:?}:\n{:#?}\n", f.filepath, f.ast);
-        });
+        if cfg!(debug_assertions) {
+            for f in &self.parsed_files {
+                dprintln!("AST of {:?}:\n{:?}\n", f.filepath, f.ast);
+            }
 
-        self.scopes.iter().enumerate().for_each(|(i, s)| {
-            dprintln!("[{}]: {:?}", i, s);
-        });
+            for (i, s) in self.scopes.iter().enumerate() {
+                dprintln!("[{}]: {:?}", i, s);
+            }
+        }
 
         Ok(())
     }
