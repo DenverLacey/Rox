@@ -99,18 +99,14 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(current_scope, rhs.as_mut())?;
             }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
-                let new_scope = ScopeIndex(self.scopes.len());
-                self.scopes.push(Scope::with_parent(current_scope));
-
+                let new_scope = self.push_scope();
                 self.establish_scope_for_nodes(new_scope, sub_nodes)?;
             }
             AstInfo::Block(_, sub_nodes) => {
                 self.establish_scope_for_nodes(current_scope, sub_nodes)?
             }
             AstInfo::Fn(info) => {
-                let func_scope = ScopeIndex(self.scopes.len());
-                self.scopes.push(Scope::with_parent(current_scope));
-
+                let func_scope = self.push_scope();
                 self.establish_scope_for_node(func_scope, &mut info.params)?;
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }
@@ -121,7 +117,6 @@ impl<'a> Scoper<'a> {
                     AstInfo::Literal => {}
                     AstInfo::Block(AstBlockKind::VarDeclTargets, targets) => {
                         for target in targets {
-                            assert!(matches!(target.info, AstInfo::Literal));
                             target.scope = current_scope;
                         }
                     }

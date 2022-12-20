@@ -11,11 +11,11 @@ pub enum Type {
 impl Type {
     pub fn size(&self) -> usize {
         match self {
-            Self::Bool => 1,
-            Self::Char => 4,
-            Self::Int => 8,
-            Self::Float => 8,
-            Self::String => 16,
+            Self::Bool => std::mem::size_of::<runtime_type::Bool>(),
+            Self::Char => std::mem::size_of::<runtime_type::Char>(),
+            Self::Int => std::mem::size_of::<runtime_type::Int>(),
+            Self::Float => std::mem::size_of::<runtime_type::Float>(),
+            Self::String => std::mem::size_of::<runtime_type::String>(),
             Self::Composite(_idx) => todo!(),
         }
     }
@@ -43,4 +43,16 @@ pub struct CompositeTypeInfoRecord {
 pub struct RecordField {
     pub name: String,
     pub typ: Type,
+}
+
+pub mod runtime_type {
+    pub type Bool = bool;
+    pub type Char = char;
+    pub type Int = i64;
+    pub type Float = f64;
+
+    pub struct String {
+        pub len: Int,
+        pub chars: *mut u8,
+    }
 }

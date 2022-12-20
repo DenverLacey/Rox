@@ -6,25 +6,6 @@ use enum_tags::*;
 use crate::interp::LoadedFile;
 use crate::util::iter::{VeryPeekable, VeryPeekableIterExt};
 
-#[allow(dead_code)]
-pub fn tokenize_file(file: &LoadedFile) -> Result<Vec<Token>, &'static str> {
-    let mut t = Tokenizer::new(file);
-    let mut tokens = vec![];
-
-    loop {
-        let token = t.next()?;
-        let end = token.is_end();
-
-        tokens.push(token);
-
-        if end {
-            break;
-        }
-    }
-
-    Ok(tokens)
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Token {
     pub loc: CodeLocation,
