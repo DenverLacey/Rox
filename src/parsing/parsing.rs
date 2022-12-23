@@ -263,6 +263,7 @@ impl<'file> Parser<'file> {
         ))
     }
 
+    // @TODO: Fix this! Why are we erroring on assignment nodes?
     fn parse_statement_or_assignment(&mut self) -> ParseResult {
         let node = self.parse_statement()?;
         if matches!(node.info, AstInfo::Binary(AstBinaryKind::Assign, _, _)) {

@@ -1,4 +1,9 @@
-use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type};
+use crate::{
+    canon::scoping::ScopeIndex,
+    interp::Pid,
+    parsing::tokenization::Token,
+    typing::value_type::Type
+};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -116,6 +121,21 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Block(kind, nodes),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Queued {
+    pub node: Ast,
+    pub deps: Vec<Pid>,
+}
+
+impl Queued {
+    pub fn new(node: Ast) -> Self {
+        Self {
+            node,
+            deps: vec![],
         }
     }
 }

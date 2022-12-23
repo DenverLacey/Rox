@@ -40,7 +40,7 @@ pub struct VariableBinding {
     pub typ: Type,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FuncID(pub usize);
 
 #[derive(Debug)]
@@ -74,6 +74,13 @@ impl<'a> Scoper<'a> {
         idx
     }
 
+    fn push_scope_with_parent(&mut self, parent: ScopeIndex) -> ScopeIndex {
+        let idx = ScopeIndex(self.scopes.len());
+        self.scopes.push(Scope::with_parent(parent));
+
+        idx
+    }
+
     fn establish_scope_for_nodes(
         &mut self,
         current_scope: ScopeIndex,
@@ -99,14 +106,14 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(current_scope, rhs.as_mut())?;
             }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
-                let new_scope = self.push_scope();
+                let new_scope = self.push_scope_with_parent(current_scope);
                 self.establish_scope_for_nodes(new_scope, sub_nodes)?;
             }
             AstInfo::Block(_, sub_nodes) => {
                 self.establish_scope_for_nodes(current_scope, sub_nodes)?
             }
             AstInfo::Fn(info) => {
-                let func_scope = self.push_scope();
+                let func_scope = self.push_scope_with_parent(current_scope);
                 self.establish_scope_for_node(func_scope, &mut info.params)?;
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }

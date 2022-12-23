@@ -1,6 +1,7 @@
+
 use std::{
     ffi::OsStr,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, collections::HashMap, mem::MaybeUninit, cell::RefCell,
 };
 
 use debug_print::debug_println as dprintln;
@@ -12,6 +13,8 @@ use crate::{
     typing::value_type::{CompositeType, Type},
 };
 
+pub(crate) static mut INTERP: RefCell<Interpreter> = RefCell::new(Interpreter::new());
+
 #[derive(Default)]
 pub struct Interpreter {
     pub loaded_files: Vec<LoadedFile>,
@@ -19,6 +22,16 @@ pub struct Interpreter {
     pub scopes: Vec<Scope>,
     pub funcs: Vec<FunctionInfo>,
     pub types: Vec<CompositeType>,
+    // pids: HashMap<Pid, ItemID>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Pid(pub usize);
+
+enum ItemID {
+    Var(usize),
+    Func(FuncID),
+    Type(usize),
 }
 
 #[derive(Debug)]
@@ -42,8 +55,14 @@ pub struct FunctionInfo {
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            loaded_files: Vec::new(),
+            parsed_files: Vec::new(),
+            scopes: Vec::new(),
+            funcs: Vec::new(),
+            types: Vec::new(),
+        }
     }
 
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
@@ -64,6 +83,21 @@ impl Interpreter {
     }
 
     pub fn execute_program(&mut self) -> Result<(), &'static str> {
+        todo!()
+    }
+}
+
+impl Interpreter {
+    pub fn create_function(&mut self) -> &mut FunctionInfo {
+        let func_id = FuncID(self.funcs.len());
+
+        let info = FunctionInfo {
+            id: func_id,
+            name: String::new(),
+            typ: Type::Composite(0),
+            code: todo!(), // unsafe { Box::<MaybeUninit<_>>::assume_init(Box::new_uninit()) }, // @SAFETY: Will be replaced by the compiler.
+        };
+
         todo!()
     }
 }
