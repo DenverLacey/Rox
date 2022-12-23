@@ -1,4 +1,4 @@
-use crate::interp::INTERP;
+use crate::interp::Interpreter;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -19,17 +19,16 @@ impl Type {
             Self::Float => std::mem::size_of::<runtime_type::Float>(),
             Self::String => std::mem::size_of::<runtime_type::String>(),
             Self::Composite(idx) => {
-                // @SAFETY: The compiler is single threaded and we never store references to the interpreter so this is always safe.
-                let interp = unsafe { INTERP.borrow() };
+                let interp = Interpreter::get();
                 let typ = &interp.types[*idx];
 
                 match typ {
-                    CompositeType::Array(info) => {
+                    TypeInfo::Array(info) => {
                         let count = info.size;
                         let element_size = info.element_type.size();
                         count * element_size
                     }
-                    CompositeType::Record(info) => {
+                    TypeInfo::Record(info) => {
                         info.fields.iter().map(|field| field.typ.size()).sum()
                     }
                 }
@@ -39,19 +38,19 @@ impl Type {
 }
 
 #[derive(Clone, Debug)]
-pub enum CompositeType {
-    Array(CompositeTypeInfoArray),
-    Record(CompositeTypeInfoRecord),
+pub enum TypeInfo {
+    Array(TypeInfoArray),
+    Record(TypeInfoRecord),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CompositeTypeInfoArray {
+pub struct TypeInfoArray {
     pub size: usize,
     pub element_type: Type,
 }
 
 #[derive(Clone, Debug)]
-pub struct CompositeTypeInfoRecord {
+pub struct TypeInfoRecord {
     pub name: String,
     pub fields: Box<[RecordField]>,
 }

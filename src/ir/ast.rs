@@ -1,6 +1,4 @@
-use crate::{
-    canon::scoping::ScopeIndex, interp::Pid, parsing::tokenization::Token, typing::value_type::Type,
-};
+use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -8,6 +6,8 @@ pub struct Ast {
     pub scope: ScopeIndex,
     pub typ: Option<Type>,
     pub info: AstInfo,
+    pub deps: Vec<DependencyLocator>,
+    pub phase: QueuedPhase,
 }
 
 #[derive(Debug)]
@@ -78,6 +78,8 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info,
+            deps: vec![],
+            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -91,6 +93,8 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Literal,
+            deps: vec![],
+            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -100,6 +104,8 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Unary(kind, sub_expression),
+            deps: vec![],
+            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -109,6 +115,8 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Binary(kind, lhs, rhs),
+            deps: vec![],
+            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -118,36 +126,22 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Block(kind, nodes),
+            deps: vec![],
+            phase: QueuedPhase::Parsed,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct DependencyLocator {
-    pub file_idx: usize,
+    pub parsed_file_idx: usize,
     pub queued_idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueuedPhase {
-    Pending,
+    Parsed,
+    DependenciesFound,
     Typechecked,
     Compiled,
-}
-
-#[derive(Debug)]
-pub struct Queued {
-    pub node: Ast,
-    pub deps: Vec<DependencyLocator>,
-    pub phase: QueuedPhase,
-}
-
-impl Queued {
-    pub fn new(node: Ast) -> Self {
-        Self {
-            node,
-            deps: vec![],
-            phase: QueuedPhase::Pending,
-        }
-    }
 }

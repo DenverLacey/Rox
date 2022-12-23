@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     ffi::OsStr,
     path::{Path, PathBuf},
 };
@@ -7,13 +6,16 @@ use std::{
 use debug_print::debug_println as dprintln;
 
 use crate::{
-    canon::scoping::{FuncID, Scope, Scoper},
+    canon::{
+        resolve_deps::Resolver,
+        scoping::{FuncID, Scope, Scoper},
+    },
     ir::ast::{Ast, AstBlockKind, AstInfo},
     parsing::parsing::parse_file,
-    typing::value_type::{CompositeType, Type},
+    typing::value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoRecord},
 };
 
-pub(crate) static mut INTERP: RefCell<Interpreter> = RefCell::new(Interpreter::new());
+static mut INTERP: Interpreter = Interpreter::new();
 
 #[derive(Default)]
 pub struct Interpreter {
@@ -21,7 +23,7 @@ pub struct Interpreter {
     pub parsed_files: Vec<ParsedFile>,
     pub scopes: Vec<Scope>,
     pub funcs: Vec<FunctionInfo>,
-    pub types: Vec<CompositeType>,
+    pub types: Vec<TypeInfo>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,7 +46,7 @@ pub struct FunctionInfo {
     pub id: FuncID,
     pub name: String,
     pub typ: Type,
-    pub code: Box<[u8]>,
+    pub code: Option<Box<[u8]>>,
 }
 
 impl Interpreter {
@@ -58,8 +60,17 @@ impl Interpreter {
         }
     }
 
+    pub fn get() -> &'static Self {
+        unsafe { &INTERP }
+    }
+
+    pub fn get_mut() -> &'static mut Self {
+        unsafe { &mut INTERP }
+    }
+
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         self.parse_program(path)?;
+        self.resolve_dependencies()?;
         self.establish_scopes()?;
 
         if cfg!(debug_assertions) {
@@ -81,17 +92,43 @@ impl Interpreter {
 }
 
 impl Interpreter {
-    pub fn create_function(&mut self) -> &mut FunctionInfo {
+    pub fn create_function(&mut self) -> FuncID { 
         let func_id = FuncID(self.funcs.len());
 
         let info = FunctionInfo {
             id: func_id,
             name: String::new(),
             typ: Type::Composite(0),
-            code: todo!(), // unsafe { Box::<MaybeUninit<_>>::assume_init(Box::new_uninit()) }, // @SAFETY: Will be replaced by the compiler.
+            code: None,
         };
 
-        todo!()
+        self.funcs.push(info);
+
+        func_id
+    }
+
+    pub fn create_or_get_array_type(&mut self, info: TypeInfoArray) -> Type {
+        for (idx, typ) in self.types.iter().enumerate() {
+            if let TypeInfo::Array(typ_info) = typ {
+                if typ_info.size == info.size && typ_info.element_type == info.element_type {
+                    return Type::Composite(idx);
+                }
+            }
+        }
+
+        let idx = self.types.len();
+        let new_type = TypeInfo::Array(info);
+        self.types.push(new_type);
+
+        Type::Composite(idx)
+    } 
+
+    pub fn create_record_type(&mut self, info: TypeInfoRecord) -> Type {
+        let idx = self.types.len();
+        let new_type = TypeInfo::Record(info);
+        self.types.push(new_type);
+
+        Type::Composite(idx)
     }
 }
 
@@ -149,6 +186,8 @@ impl Interpreter {
                 scope: _,
                 typ: _,
                 info: AstInfo::Block(AstBlockKind::Program, nodes),
+                deps: _,
+                phase: _,
             } = &mut file.ast
             {
                 scoper.establish_scope_for_file(nodes)?;
@@ -157,6 +196,12 @@ impl Interpreter {
             }
         }
 
+        Ok(())
+    }
+
+    fn resolve_dependencies(&mut self) -> Result<(), &'static str> {
+        let mut resolver = Resolver::new(&mut self.parsed_files);
+        resolver.resolve_dependencies()?;
         Ok(())
     }
 }
