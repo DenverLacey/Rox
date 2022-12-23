@@ -1,7 +1,7 @@
-
 use std::{
+    cell::RefCell,
     ffi::OsStr,
-    path::{Path, PathBuf}, collections::HashMap, mem::MaybeUninit, cell::RefCell,
+    path::{Path, PathBuf},
 };
 
 use debug_print::debug_println as dprintln;
@@ -22,17 +22,10 @@ pub struct Interpreter {
     pub scopes: Vec<Scope>,
     pub funcs: Vec<FunctionInfo>,
     pub types: Vec<CompositeType>,
-    // pids: HashMap<Pid, ItemID>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pid(pub usize);
-
-enum ItemID {
-    Var(usize),
-    Func(FuncID),
-    Type(usize),
-}
 
 #[derive(Debug)]
 pub struct LoadedFile {

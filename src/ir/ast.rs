@@ -1,8 +1,5 @@
 use crate::{
-    canon::scoping::ScopeIndex,
-    interp::Pid,
-    parsing::tokenization::Token,
-    typing::value_type::Type
+    canon::scoping::ScopeIndex, interp::Pid, parsing::tokenization::Token, typing::value_type::Type,
 };
 
 #[derive(Debug)]
@@ -125,10 +122,24 @@ impl Ast {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct DependencyLocator {
+    pub file_idx: usize,
+    pub queued_idx: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueuedPhase {
+    Pending,
+    Typechecked,
+    Compiled,
+}
+
 #[derive(Debug)]
 pub struct Queued {
     pub node: Ast,
-    pub deps: Vec<Pid>,
+    pub deps: Vec<DependencyLocator>,
+    pub phase: QueuedPhase,
 }
 
 impl Queued {
@@ -136,6 +147,7 @@ impl Queued {
         Self {
             node,
             deps: vec![],
+            phase: QueuedPhase::Pending,
         }
     }
 }

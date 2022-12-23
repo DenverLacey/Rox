@@ -93,7 +93,11 @@ impl<'a> Scoper<'a> {
         Ok(())
     }
 
-    fn establish_scope_for_node(&mut self, current_scope: ScopeIndex, node: &mut Ast) -> ScoperResult {
+    fn establish_scope_for_node(
+        &mut self,
+        current_scope: ScopeIndex,
+        node: &mut Ast,
+    ) -> ScoperResult {
         node.scope = current_scope;
 
         match &mut node.info {

@@ -20,16 +20,18 @@ impl Type {
             Self::String => std::mem::size_of::<runtime_type::String>(),
             Self::Composite(idx) => {
                 // @SAFETY: The compiler is single threaded and we never store references to the interpreter so this is always safe.
-                let interp = unsafe { INTERP.borrow() }; 
+                let interp = unsafe { INTERP.borrow() };
                 let typ = &interp.types[*idx];
-                
+
                 match typ {
                     CompositeType::Array(info) => {
                         let count = info.size;
                         let element_size = info.element_type.size();
                         count * element_size
                     }
-                    CompositeType::Record(info) => info.fields.iter().map(|field| field.typ.size()).sum(),
+                    CompositeType::Record(info) => {
+                        info.fields.iter().map(|field| field.typ.size()).sum()
+                    }
                 }
             }
         }

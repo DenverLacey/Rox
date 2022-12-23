@@ -1,2 +1,2 @@
-pub mod scoping;
 pub mod resolve_deps;
+pub mod scoping;
