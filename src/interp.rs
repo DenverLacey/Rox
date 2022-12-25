@@ -80,6 +80,7 @@ impl Interpreter {
             for (i, s) in self.scopes.iter().enumerate() {
                 dprintln!("[{}]: {:?}", i, s);
             }
+            dprintln!("");
         }
 
         self.resolve_dependencies()?;
