@@ -147,6 +147,17 @@ impl<'a> Scoper<'a> {
                     }
                 }
             }
+            AstInfo::Import(info) => {
+                self.establish_scope_for_node(current_scope, &mut info.path)?;
+
+                if let Some(rn) = &mut info.renamer {
+                    self.establish_scope_for_node(current_scope, rn)?;
+                }
+
+                if let Some(ex) = &mut info.exposing {
+                    self.establish_scope_for_node(current_scope, ex)?;
+                }
+            }
         }
 
         Ok(())

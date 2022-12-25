@@ -18,6 +18,7 @@ pub enum AstInfo {
     Block(AstBlockKind, Vec<Ast>),
     Fn(Box<AstInfoFn>),
     Var(Box<AstInfoVar>),
+    Import(Box<AstInfoImport>),
 }
 
 #[derive(Debug)]
@@ -69,6 +70,13 @@ pub enum VariableInitializer {
     TypeAndExpr(Ast, Ast),
     Type(Ast),
     Expr(Ast),
+}
+
+#[derive(Debug)]
+pub struct AstInfoImport {
+    pub path: Ast,
+    pub renamer: Option<Ast>,
+    pub exposing: Option<Ast>,
 }
 
 impl Ast {

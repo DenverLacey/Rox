@@ -1,3 +1,5 @@
+import "std/collections/vec" as V exposing { Vec }
+
 fn main() {
   XXXprint 1.5
   let x = 1

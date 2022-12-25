@@ -36,6 +36,7 @@ pub enum TokenInfo {
     Ident(String), // @IMPROVE: This could probably be a &str with some lifetime
     Int(i64),
     Float(f64),
+    String(String), // @IMPOVE: ^^
 
     // Delimeters
     Newline,
@@ -62,6 +63,7 @@ pub enum TokenInfo {
     Let,
     Mut,
     Fn,
+    As,
 
     XXXPrint,
 }
@@ -73,6 +75,7 @@ impl TokenInfo {
             TokenInfo::Ident(_) => TokenPrecedence::None,
             TokenInfo::Int(_) => TokenPrecedence::None,
             TokenInfo::Float(_) => TokenPrecedence::None,
+            TokenInfo::String(_) => TokenPrecedence::None,
             TokenInfo::Newline => TokenPrecedence::None,
             TokenInfo::Comma => TokenPrecedence::None,
             TokenInfo::Colon => TokenPrecedence::Colon,
@@ -93,6 +96,7 @@ impl TokenInfo {
             TokenInfo::Let => TokenPrecedence::None,
             TokenInfo::Mut => TokenPrecedence::None,
             TokenInfo::Fn => TokenPrecedence::None,
+            TokenInfo::As => TokenPrecedence::Cast,
             TokenInfo::XXXPrint => TokenPrecedence::None,
         }
     }
@@ -223,6 +227,15 @@ impl<'file> Tokenizer<'file> {
         c
     }
 
+    fn match_char(&mut self, c: char) -> bool {
+        if self.peek_char() == c {
+            self.next_char();
+            return true;
+        }
+
+        false
+    }
+
     pub fn peek(&mut self, n: usize) -> Result<&Token, &'static str> {
         while self.peeked.len() <= n {
             let token = self.next_no_peeking()?;
@@ -244,6 +257,7 @@ impl<'file> Tokenizer<'file> {
 
         let c = self.peek_char();
         let token = match c {
+            '"' => self.tokenize_string()?,
             _ if c.is_ascii_digit() => self.tokenize_number()?,
             _ if Self::is_ident_begin(c) => self.tokenize_identifier_or_keyword(),
             _ => self.tokenize_punctuation()?,
@@ -275,6 +289,32 @@ impl<'file> Tokenizer<'file> {
                 _ => break,
             }
         }
+    }
+
+    fn tokenize_string(&mut self) -> Result<Token, &'static str> {
+        let dbl_quote = self.next_char();
+        assert!(
+            dbl_quote == '"',
+            "[INTERNAL ERR] `tokenize_string` didn't find first `\"`."
+        );
+
+        let str_tok = self.cur_loc;
+
+        let mut word = String::new();
+        while self.peek_char() != '"' && self.peek_char() != '\0' {
+            let c = self.next_char();
+            match c {
+                '\n' => return Err("Newline encountered before string literal was terminated."),
+                '\\' => todo!(),
+                _ => word.push(c),
+            }
+        }
+
+        if !self.match_char('"') {
+            return Err("Unterminated string literal");
+        }
+
+        Ok(Token::new(str_tok, TokenInfo::String(word)))
     }
 
     fn tokenize_number(&mut self) -> Result<Token, &'static str> {
@@ -318,6 +358,7 @@ impl<'file> Tokenizer<'file> {
             "let" => Token::new(tok_loc, TokenInfo::Let),
             "mut" => Token::new(tok_loc, TokenInfo::Mut),
             "fn" => Token::new(tok_loc, TokenInfo::Fn),
+            "as" => Token::new(tok_loc, TokenInfo::As),
             "XXXprint" => Token::new(tok_loc, TokenInfo::XXXPrint),
             _ => Token::new(tok_loc, TokenInfo::Ident(word)),
         }

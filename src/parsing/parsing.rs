@@ -3,8 +3,8 @@ use enum_tags::TaggedEnum;
 use crate::{
     interp::{LoadedFile, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind,
-        VariableInitializer,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoVar,
+        AstUnaryKind, VariableInitializer,
     },
     parsing::tokenization::*,
     util::lformat,
@@ -103,6 +103,21 @@ impl<'file> Parser<'file> {
         self.skip_newline()?;
         self.expect_token(kind, err)
     }
+
+    fn match_ident(&mut self, ident: impl AsRef<str>) -> Result<bool, &'static str> {
+        if self.check_token(TokenInfoTag::Ident)? {
+            let ident_tok = self.peek_token(0).expect("Already peeked");
+            match &ident_tok.info {
+                TokenInfo::Ident(found) if ident.as_ref() == found => {
+                    self.next_token().expect("Already peeked");
+                    Ok(true)
+                }
+                _ => Ok(false),
+            }
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 impl<'file> Parser<'file> {
@@ -111,7 +126,7 @@ impl<'file> Parser<'file> {
         match token.info {
             TokenInfo::Fn => self.parse_fn_decl(),
             TokenInfo::Let | TokenInfo::Mut => self.parse_var_decl(),
-            TokenInfo::Import => todo!(),
+            TokenInfo::Import => self.parse_import_decl(),
             _ => self.parse_statement_or_assignment(),
         }
     }
@@ -263,6 +278,59 @@ impl<'file> Parser<'file> {
         ))
     }
 
+    fn parse_import_decl(&mut self) -> ParseResult {
+        let import_tok = self.expect_token(
+            TokenInfoTag::Import,
+            "Expected `import` keyword to begin import declaration.",
+        )?;
+
+        let path_tok = self.expect_token(
+            TokenInfoTag::String,
+            "Expected file path after `import` keyword in import declaration.",
+        )?;
+        let path = Ast::new_literal(path_tok);
+
+        let renamer = if self.match_token(TokenInfoTag::As)? {
+            let renamer_tok = self.expect_token(
+                TokenInfoTag::Ident,
+                "Expected an identifier after `as` keyword in import declaration.",
+            )?;
+            Some(Ast::new_literal(renamer_tok))
+        } else {
+            None
+        };
+
+        let exposing = if self.match_ident("exposing")? {
+            self.expect_token(
+                TokenInfoTag::CurlyOpen,
+                "Expected `{` after `exposing` contextual keyword in import declaration.",
+            )?;
+
+            let items = self.parse_comma_separated_expressions(
+                AstBlockKind::Args,
+                TokenInfoTag::CurlyClose,
+                None,
+            )?;
+            self.expect_token(
+                TokenInfoTag::CurlyClose,
+                "Expected `}` to terminate item list of exopsing clause in import declaration.",
+            )?;
+
+            Some(items)
+        } else {
+            None
+        };
+
+        Ok(Ast::new(
+            import_tok,
+            AstInfo::Import(Box::new(AstInfoImport {
+                path,
+                renamer,
+                exposing,
+            })),
+        ))
+    }
+
     // @TODO: Fix this! Why are we erroring on assignment nodes?
     fn parse_statement_or_assignment(&mut self) -> ParseResult {
         let node = self.parse_statement()?;
@@ -316,9 +384,10 @@ impl<'file> Parser<'file> {
 
     fn parse_prefix(&mut self, token: Token) -> ParseResult {
         match token.info {
-            TokenInfo::Ident(_) | TokenInfo::Int(_) | TokenInfo::Float(_) => {
-                Ok(Ast::new_literal(token))
-            }
+            TokenInfo::Ident(_)
+            | TokenInfo::Int(_)
+            | TokenInfo::Float(_)
+            | TokenInfo::String(_) => Ok(Ast::new_literal(token)),
             TokenInfo::ParenOpen => {
                 let node = self.parse_expression()?;
                 self.expect_token(

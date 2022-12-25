@@ -70,7 +70,6 @@ impl Interpreter {
 
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         self.parse_program(path)?;
-        self.resolve_dependencies()?;
         self.establish_scopes()?;
 
         if cfg!(debug_assertions) {
@@ -82,6 +81,8 @@ impl Interpreter {
                 dprintln!("[{}]: {:?}", i, s);
             }
         }
+
+        self.resolve_dependencies()?;
 
         Ok(())
     }
