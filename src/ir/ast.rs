@@ -95,6 +95,38 @@ impl Ast {
         Ast::new_block(AstBlockKind::Program, Token::default(), nodes)
     }
 
+    pub fn program_nodes(&self) -> &[Ast] {
+        if let Ast {
+            token: _,
+            scope: _,
+            typ: _,
+            info: AstInfo::Block(AstBlockKind::Program, nodes),
+            deps: _,
+            phase: _,
+        } = self
+        {
+            return nodes.as_slice();
+        } else {
+            panic!("[INTERNAL ERR] File's `ast` is not a `Program` node.");
+        }
+    }
+
+    pub fn program_nodes_mut(&mut self) -> &mut [Ast] {
+        if let Ast {
+            token: _,
+            scope: _,
+            typ: _,
+            info: AstInfo::Block(AstBlockKind::Program, nodes),
+            deps: _,
+            phase: _,
+        } = self
+        {
+            return nodes.as_mut_slice();
+        } else {
+            panic!("[INTERNAL ERR] File's `ast` is not a `Program` node.");
+        }
+    }
+
     pub fn new_literal(token: Token) -> Self {
         Self {
             token,

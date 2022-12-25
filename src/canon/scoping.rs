@@ -58,7 +58,7 @@ impl<'a> Scoper<'a> {
         Self { scopes }
     }
 
-    pub fn establish_scope_for_file(&mut self, nodes: &mut Vec<Ast>) -> ScoperResult {
+    pub fn establish_scope_for_file(&mut self, nodes: &mut [Ast]) -> ScoperResult {
         let file_scope = self.push_scope();
         self.establish_scope_for_nodes(file_scope, nodes)
     }
@@ -84,7 +84,7 @@ impl<'a> Scoper<'a> {
     fn establish_scope_for_nodes(
         &mut self,
         current_scope: ScopeIndex,
-        nodes: &mut Vec<Ast>,
+        nodes: &mut [Ast],
     ) -> ScoperResult {
         for node in nodes {
             self.establish_scope_for_node(current_scope, node)?;

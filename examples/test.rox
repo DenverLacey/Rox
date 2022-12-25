@@ -1,4 +1,7 @@
 import "std/collections/vec" as V exposing { Vec }
+import "std/collections/map" as M
+import "std/collections/stack" exposing { Stack }
+import "std/collections/queue"
 
 fn main() {
   XXXprint 1.5

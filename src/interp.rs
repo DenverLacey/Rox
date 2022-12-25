@@ -50,7 +50,7 @@ pub struct FunctionInfo {
 }
 
 impl Interpreter {
-    pub const fn new() -> Self {
+    const fn new() -> Self {
         Self {
             loaded_files: Vec::new(),
             parsed_files: Vec::new(),
@@ -93,7 +93,7 @@ impl Interpreter {
 }
 
 impl Interpreter {
-    pub fn create_function(&mut self) -> FuncID { 
+    pub fn create_function(&mut self) -> FuncID {
         let func_id = FuncID(self.funcs.len());
 
         let info = FunctionInfo {
@@ -122,7 +122,7 @@ impl Interpreter {
         self.types.push(new_type);
 
         Type::Composite(idx)
-    } 
+    }
 
     pub fn create_record_type(&mut self, info: TypeInfoRecord) -> Type {
         let idx = self.types.len();
@@ -182,19 +182,8 @@ impl Interpreter {
         let mut scoper = Scoper::new(&mut self.scopes);
 
         for file in &mut self.parsed_files {
-            if let Ast {
-                token: _,
-                scope: _,
-                typ: _,
-                info: AstInfo::Block(AstBlockKind::Program, nodes),
-                deps: _,
-                phase: _,
-            } = &mut file.ast
-            {
-                scoper.establish_scope_for_file(nodes)?;
-            } else {
-                return Err("[ERR] Ast node of parsed file not a Program ndoe.");
-            }
+            let nodes = file.ast.program_nodes_mut();
+            scoper.establish_scope_for_file(nodes)?;
         }
 
         Ok(())
