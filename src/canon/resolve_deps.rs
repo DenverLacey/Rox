@@ -4,7 +4,9 @@ use debug_print::debug_println as dprintln;
 
 use crate::{
     interp::ParsedFile,
-    ir::ast::{Ast, AstBlockKind, AstInfo, Dependency, Queued, QueuedPhase, VariableInitializer},
+    ir::ast::{
+        Ast, AstBlockKind, AstInfo, Dependency, Queued, QueuedProgress, VariableInitializer,
+    },
     parsing::tokenization::TokenInfo,
     util::lformat,
 };
@@ -176,7 +178,7 @@ impl<'files> Resolver<'files> {
             AstInfo::Import(_) => {}
         }
 
-        node.phase = QueuedPhase::DependenciesFound;
+        node.progress = QueuedProgress::DependenciesFound;
     }
 
     fn resolve_dependencies_for_nodes(
@@ -195,11 +197,9 @@ impl<'files> Resolver<'files> {
         node: &Ast,
     ) {
         match &node.info {
-            AstInfo::Literal => {
-                if let TokenInfo::Ident(ident) = &node.token.info {
-                    if let Some(dep) = current_scope.find_ident(ident) {
-                        deps.push(dep);
-                    }
+            AstInfo::Literal => if let TokenInfo::Ident(ident) = &node.token.info {
+                if let Some(dep) = current_scope.find_ident(ident) {
+                    deps.push(dep);
                 }
             }
             AstInfo::Unary(_, sub_expr) => {
@@ -243,7 +243,9 @@ impl<'files> Resolver<'files> {
                     continue;
                 }
 
-                self.detect_circular_dependencies_for_queued(Dependency::new(file_idx, node_idx))?;
+                self.detect_circular_dependencies_for_queued(Dependency::new(
+                    file_idx, node_idx,
+                ))?;
             }
         }
 

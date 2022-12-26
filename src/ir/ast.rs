@@ -1,9 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{
-    canon::scoping::ScopeIndex, interp::Interpreter, parsing::tokenization::Token,
-    typing::value_type::Type,
-};
+use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type, interp::Interpreter};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -151,7 +148,7 @@ impl Dependency {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum QueuedPhase {
+pub enum QueuedProgress {
     Parsed,
     DependenciesFound,
     PartiallyTypechecked,
@@ -163,7 +160,7 @@ pub enum QueuedPhase {
 pub struct Queued {
     pub node: Ast,
     pub deps: Vec<Dependency>,
-    pub phase: QueuedPhase,
+    pub progress: QueuedProgress,
 }
 
 impl Queued {
@@ -171,7 +168,7 @@ impl Queued {
         Self {
             node,
             deps: Vec::new(),
-            phase: QueuedPhase::Parsed,
+            progress: QueuedProgress::Parsed,
         }
     }
 
@@ -180,7 +177,7 @@ impl Queued {
 
         for dep in &self.deps {
             let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
-            if dep.phase < QueuedPhase::PartiallyTypechecked {
+            if dep.progress < QueuedProgress::PartiallyTypechecked {
                 return false;
             }
         }
@@ -189,6 +186,6 @@ impl Queued {
     }
 
     pub fn is_typechecked(&self) -> bool {
-        self.phase >= QueuedPhase::Typechecked
+        self.progress >= QueuedProgress::Typechecked
     }
 }

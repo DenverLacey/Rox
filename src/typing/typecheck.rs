@@ -3,7 +3,7 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
-        QueuedPhase,
+        QueuedProgress,
     },
     parsing::tokenization::Token,
 };
@@ -37,30 +37,30 @@ fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {
         AstInfo::Var(info) => {
             let scope = &mut interp.scopes[queued.node.scope.0];
             typecheck_var_decl(scope, &queued.node.token, info)?;
-            queued.phase = QueuedPhase::Typechecked;
+            queued.progress = QueuedProgress::Typechecked;
         }
         AstInfo::Fn(info) => {
             let scope = &mut interp.scopes[queued.node.scope.0];
 
-            match queued.phase {
-                QueuedPhase::DependenciesFound => {
+            match queued.progress {
+                QueuedProgress::DependenciesFound => {
                     typecheck_fn_header(scope, &queued.node.token, info)?;
-                    queued.phase = QueuedPhase::PartiallyTypechecked;
+                    queued.progress = QueuedProgress::PartiallyTypechecked;
                 }
-                QueuedPhase::PartiallyTypechecked => {
+                QueuedProgress::PartiallyTypechecked => {
                     typecheck_fn_body(scope, &queued.node.token, info)?;
-                    queued.phase = QueuedPhase::Typechecked;
+                    queued.progress = QueuedProgress::Typechecked;
                 }
                 _ => panic!(
                     "[INTERNAL ERR] Function node reached `typecheck_queued` at phase {:?}",
-                    queued.phase
+                    queued.progress
                 ),
             }
         }
         AstInfo::Import(info) => todo!(),
         _ => {
             typecheck_node(interp, &mut queued.node)?;
-            queued.phase = QueuedPhase::Typechecked;
+            queued.progress = QueuedProgress::Typechecked;
         }
     }
 
