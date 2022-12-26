@@ -13,5 +13,11 @@ fn main() {
 
 fn foo() {
   XXXprint "This is a dependency"
+  main()
 }
 
+# These are examples of circular dependencies
+# and should not compile.
+# let x = y + 1
+# let y = x - 1
+# let z = z + 1

@@ -4,8 +4,11 @@ use debug_print::debug_println as dprintln;
 
 use crate::{
     interp::ParsedFile,
-    ir::ast::{Ast, AstBlockKind, AstInfo, DependencyLocator, Queued, VariableInitializer},
+    ir::ast::{
+        Ast, AstBlockKind, AstInfo, DependencyLocator, Queued, QueuedPhase, VariableInitializer,
+    },
     parsing::tokenization::TokenInfo,
+    util::lformat,
 };
 
 pub struct Resolver<'files> {
@@ -160,10 +163,10 @@ impl<'files> Resolver<'files> {
                         Self::resolve_dependencies_for_node(current_scope, deps, expr);
                     }
                     VariableInitializer::Type(typ) => {
-                        Self::resolve_dependencies_for_node(current_scope, deps, typ)
+                        Self::resolve_dependencies_for_node(current_scope, deps, typ);
                     }
                     VariableInitializer::Expr(expr) => {
-                        Self::resolve_dependencies_for_node(current_scope, deps, expr)
+                        Self::resolve_dependencies_for_node(current_scope, deps, expr);
                     }
                 }
             }
@@ -174,6 +177,8 @@ impl<'files> Resolver<'files> {
             AstInfo::Block(_, _) => {}
             AstInfo::Import(_) => {}
         }
+
+        node.phase = QueuedPhase::DependenciesFound;
     }
 
     fn resolve_dependencies_for_nodes(
@@ -228,11 +233,63 @@ impl<'files> Resolver<'files> {
     }
 
     fn detect_circular_dependencies(&self) -> Result<(), &'static str> {
-        // @NOTE:
-        // Do a depth first search to avoid having to mess around with lifting children deps up
-        // with the parents'
-        //
-        todo!()
+        for file_idx in 0..self.files.len() {
+            let len_nodes = self.files[file_idx].ast.len();
+            for node_idx in 0..len_nodes {
+                let node = &self.files[file_idx].ast[node_idx];
+                // @NOTE:
+                // Im not 100% sure this is correct. The thinking is functions don't have circular
+                // dependencies because of recursion kind of reasons and we'll detect actually bad
+                // circular dependencies in the other kind of noes.
+                //
+                if matches!(node.node.info, AstInfo::Fn(_)) {
+                    continue;
+                }
+
+                self.detect_circular_dependencies_for_queued(DependencyLocator::new(
+                    file_idx, node_idx,
+                ))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn detect_circular_dependencies_for_queued(
+        &self,
+        queued_loc: DependencyLocator,
+    ) -> Result<(), &'static str> {
+        let deps = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx].deps;
+        for dep in deps {
+            self.detect_circular_dependency(queued_loc, *dep, *dep)?;
+        }
+
+        Ok(())
+    }
+
+    fn detect_circular_dependency(
+        &self,
+        needle: DependencyLocator,
+        parent_dep: DependencyLocator,
+        dep: DependencyLocator,
+    ) -> Result<(), &'static str> {
+        if needle == dep {
+            // @TODO:
+            // Improve error message
+            //
+            return Err(lformat!(
+                "Circular dependency detected between {:?} and {:?}.",
+                needle,
+                parent_dep
+            ));
+        }
+
+        let deps = &self.files[dep.parsed_file_idx].ast[dep.queued_idx].deps;
+        for child_dep in deps {
+            self.detect_circular_dependency(needle, parent_dep, *child_dep)?;
+        }
+
+        Ok(())
     }
 }
 

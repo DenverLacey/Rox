@@ -158,7 +158,7 @@ impl Ast {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct DependencyLocator {
     pub parsed_file_idx: usize,
     pub queued_idx: usize,
@@ -183,6 +183,7 @@ impl DependencyLocator {
 pub enum QueuedPhase {
     Parsed,
     DependenciesFound,
+    PartiallyTypechecked,
     Typechecked,
     Compiled,
 }
