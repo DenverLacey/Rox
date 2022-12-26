@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type, interp::Interpreter};
+use crate::{
+    canon::scoping::ScopeIndex, interp::Interpreter, parsing::tokenization::Token,
+    typing::value_type::Type,
+};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -21,14 +24,14 @@ pub enum AstInfo {
     Import(Box<AstInfoImport>),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AstUnaryKind {
     Neg,
     Not,
     XXXPrint,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AstBinaryKind {
     Add,
     Sub,
@@ -41,7 +44,7 @@ pub enum AstBinaryKind {
     Param,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AstBlockKind {
     Program,
     Block,
@@ -127,18 +130,18 @@ impl Ast {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct DependencyLocator {
+pub struct Dependency {
     pub parsed_file_idx: usize,
     pub queued_idx: usize,
 }
 
-impl Debug for DependencyLocator {
+impl Debug for Dependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({},{})", self.parsed_file_idx, self.queued_idx)
     }
 }
 
-impl DependencyLocator {
+impl Dependency {
     pub fn new(parsed_file_idx: usize, queued_idx: usize) -> Self {
         Self {
             parsed_file_idx,
@@ -159,7 +162,7 @@ pub enum QueuedPhase {
 #[derive(Debug)]
 pub struct Queued {
     pub node: Ast,
-    pub deps: Vec<DependencyLocator>,
+    pub deps: Vec<Dependency>,
     pub phase: QueuedPhase,
 }
 

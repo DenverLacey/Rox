@@ -4,9 +4,7 @@ use debug_print::debug_println as dprintln;
 
 use crate::{
     interp::ParsedFile,
-    ir::ast::{
-        Ast, AstBlockKind, AstInfo, DependencyLocator, Queued, QueuedPhase, VariableInitializer,
-    },
+    ir::ast::{Ast, AstBlockKind, AstInfo, Dependency, Queued, QueuedPhase, VariableInitializer},
     parsing::tokenization::TokenInfo,
     util::lformat,
 };
@@ -126,7 +124,7 @@ impl<'files> Resolver<'files> {
             .extend(self.globals[file_idx].iter().map(|global| {
                 (
                     global.name.clone(),
-                    DependencyLocator::new(file_idx, global.queued_idx),
+                    Dependency::new(file_idx, global.queued_idx),
                 )
             }));
 
@@ -183,7 +181,7 @@ impl<'files> Resolver<'files> {
 
     fn resolve_dependencies_for_nodes(
         current_scope: &mut Scope,
-        deps: &mut Vec<DependencyLocator>,
+        deps: &mut Vec<Dependency>,
         nodes: &[Ast],
     ) {
         for node in nodes {
@@ -193,13 +191,15 @@ impl<'files> Resolver<'files> {
 
     fn resolve_dependencies_for_node(
         current_scope: &mut Scope,
-        deps: &mut Vec<DependencyLocator>,
+        deps: &mut Vec<Dependency>,
         node: &Ast,
     ) {
         match &node.info {
-            AstInfo::Literal => if let TokenInfo::Ident(ident) = &node.token.info {
-                if let Some(dep) = current_scope.find_ident(ident) {
-                    deps.push(dep);
+            AstInfo::Literal => {
+                if let TokenInfo::Ident(ident) = &node.token.info {
+                    if let Some(dep) = current_scope.find_ident(ident) {
+                        deps.push(dep);
+                    }
                 }
             }
             AstInfo::Unary(_, sub_expr) => {
@@ -243,9 +243,7 @@ impl<'files> Resolver<'files> {
                     continue;
                 }
 
-                self.detect_circular_dependencies_for_queued(DependencyLocator::new(
-                    file_idx, node_idx,
-                ))?;
+                self.detect_circular_dependencies_for_queued(Dependency::new(file_idx, node_idx))?;
             }
         }
 
@@ -254,11 +252,11 @@ impl<'files> Resolver<'files> {
 
     fn detect_circular_dependencies_for_queued(
         &self,
-        queued_loc: DependencyLocator,
+        queued_loc: Dependency,
     ) -> Result<(), &'static str> {
         let deps = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx].deps;
-        for dep in deps {
-            self.detect_circular_dependency(queued_loc, *dep, *dep)?;
+        for &dep in deps {
+            self.detect_circular_dependency(queued_loc, dep, dep)?;
         }
 
         Ok(())
@@ -266,9 +264,9 @@ impl<'files> Resolver<'files> {
 
     fn detect_circular_dependency(
         &self,
-        needle: DependencyLocator,
-        parent_dep: DependencyLocator,
-        dep: DependencyLocator,
+        needle: Dependency,
+        parent_dep: Dependency,
+        dep: Dependency,
     ) -> Result<(), &'static str> {
         if needle == dep {
             // @TODO:
@@ -297,7 +295,7 @@ struct Global {
 }
 
 struct Scope {
-    locators: HashMap<String, DependencyLocator>,
+    locators: HashMap<String, Dependency>,
 }
 
 impl Scope {
@@ -307,7 +305,7 @@ impl Scope {
         }
     }
 
-    fn find_ident(&self, ident: &String) -> Option<DependencyLocator> {
+    fn find_ident(&self, ident: &String) -> Option<Dependency> {
         self.locators.get(ident).copied()
     }
 }

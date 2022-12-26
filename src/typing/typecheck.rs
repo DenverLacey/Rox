@@ -1,6 +1,16 @@
-use crate::{interp::ParsedFile, ir::ast::Queued};
+use crate::{
+    canon::scoping::Scope,
+    interp::{Interpreter, ParsedFile},
+    ir::ast::{
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
+        QueuedPhase,
+    },
+    parsing::tokenization::Token,
+};
 
-pub fn typecheck(files: &mut [ParsedFile]) -> Result<(), &'static str> {
+use super::value_type::Type;
+
+pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     let mut typecheck_complete = false;
     while !typecheck_complete {
         typecheck_complete = true;
@@ -21,5 +31,125 @@ pub fn typecheck(files: &mut [ParsedFile]) -> Result<(), &'static str> {
 }
 
 fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {
+    let interp = Interpreter::get_mut();
+
+    match &mut queued.node.info {
+        AstInfo::Var(info) => {
+            let scope = &mut interp.scopes[queued.node.scope.0];
+            typecheck_var_decl(scope, &queued.node.token, info)?;
+            queued.phase = QueuedPhase::Typechecked;
+        }
+        AstInfo::Fn(info) => {
+            let scope = &mut interp.scopes[queued.node.scope.0];
+
+            match queued.phase {
+                QueuedPhase::DependenciesFound => {
+                    typecheck_fn_header(scope, &queued.node.token, info)?;
+                    queued.phase = QueuedPhase::PartiallyTypechecked;
+                }
+                QueuedPhase::PartiallyTypechecked => {
+                    typecheck_fn_body(scope, &queued.node.token, info)?;
+                    queued.phase = QueuedPhase::Typechecked;
+                }
+                _ => panic!(
+                    "[INTERNAL ERR] Function node reached `typecheck_queued` at phase {:?}",
+                    queued.phase
+                ),
+            }
+        }
+        AstInfo::Import(info) => todo!(),
+        _ => {
+            typecheck_node(interp, &mut queued.node)?;
+            queued.phase = QueuedPhase::Typechecked;
+        }
+    }
+
+    Ok(())
+}
+
+fn typecheck_var_decl(
+    scope: &mut Scope,
+    token: &Token,
+    info: &mut AstInfoVar,
+) -> Result<(), &'static str> {
+    todo!()
+}
+
+fn typecheck_fn_header(
+    scope: &mut Scope,
+    token: &Token,
+    info: &mut AstInfoFn,
+) -> Result<(), &'static str> {
+    todo!()
+}
+
+fn typecheck_fn_body(
+    scope: &mut Scope,
+    token: &Token,
+    info: &mut AstInfoFn,
+) -> Result<(), &'static str> {
+    todo!()
+}
+
+fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<(), &'static str> {
+    match &mut node.info {
+        AstInfo::Literal => {
+            let scope = &mut interp.scopes[node.scope.0];
+            let typ = typecheck_literal(scope, &node.token)?;
+            node.typ = Some(typ);
+        }
+        AstInfo::Unary(kind, sub_expr) => {
+            let scope = &mut interp.scopes[node.scope.0];
+            let typ = typecheck_unary(scope, &node.token, *kind, sub_expr)?;
+            node.typ = Some(typ);
+        }
+        AstInfo::Binary(kind, lhs, rhs) => {
+            let scope = &mut interp.scopes[node.scope.0];
+            let typ = typecheck_binary(scope, &node.token, *kind, lhs, rhs)?;
+            node.typ = Some(typ);
+        }
+        AstInfo::Block(kind, nodes) => {
+            let scope = &mut interp.scopes[node.scope.0];
+            typecheck_block(scope, &node.token, *kind, nodes)?;
+        }
+        AstInfo::Var(info) => todo!(),
+        AstInfo::Fn(info) => todo!(),
+        AstInfo::Import(info) => todo!(),
+    }
+
+    Ok(())
+}
+
+type TypecheckResult = Result<Type, &'static str>;
+
+fn typecheck_literal(scope: &mut Scope, token: &Token) -> TypecheckResult {
+    todo!()
+}
+
+fn typecheck_unary(
+    scope: &mut Scope,
+    token: &Token,
+    kind: AstUnaryKind,
+    expr: &mut Ast,
+) -> TypecheckResult {
+    todo!()
+}
+
+fn typecheck_binary(
+    scope: &mut Scope,
+    token: &Token,
+    kind: AstBinaryKind,
+    lhs: &mut Ast,
+    rhs: &mut Ast,
+) -> TypecheckResult {
+    todo!()
+}
+
+fn typecheck_block(
+    scope: &mut Scope,
+    token: &Token,
+    kind: AstBlockKind,
+    nodes: &mut [Ast],
+) -> Result<(), &'static str> {
     todo!()
 }

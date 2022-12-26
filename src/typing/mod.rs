@@ -1,2 +1,2 @@
-pub mod value_type;
 pub mod typecheck;
+pub mod value_type;

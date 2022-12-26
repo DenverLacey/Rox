@@ -8,11 +8,14 @@ use debug_print::debug_println as dprintln;
 use crate::{
     canon::{
         resolve_deps::Resolver,
-        scoping::{FuncID, Scope, Scoper},
+        scoping::{FuncID, Scope, ScopeIndex, Scoper},
     },
     ir::ast::Queued,
     parsing::parsing::parse_file,
-    typing::value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoRecord},
+    typing::{
+        typecheck::typecheck_files,
+        value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoRecord},
+    },
 };
 
 static mut INTERP: Interpreter = Interpreter::new();
@@ -84,6 +87,7 @@ impl Interpreter {
         }
 
         self.resolve_dependencies()?;
+        typecheck_files(&mut self.parsed_files)?;
 
         Ok(())
     }
