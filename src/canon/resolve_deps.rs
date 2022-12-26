@@ -4,7 +4,7 @@ use debug_print::debug_println as dprintln;
 
 use crate::{
     interp::ParsedFile,
-    ir::ast::{AstBlockKind, AstInfo, DependencyLocator},
+    ir::ast::{AstBlockKind, AstInfo, DependencyLocator, Queued, Ast, VariableInitializer},
     parsing::tokenization::TokenInfo,
 };
 
@@ -118,13 +118,59 @@ impl<'files> Resolver<'files> {
                 )
             }));
 
-        let file = &self.files[file_idx];
-        for (node_idx, node) in file.ast.iter().enumerate() {
-            todo!()
+        let file = &mut self.files[file_idx];
+        for node in file.ast.iter_mut() {
+            Self::resolve_dependencies_for_queued(current_scope, node);
         }
 
         self.end_scope();
         Ok(())
+    }
+
+    fn resolve_dependencies_for_queued(current_scope: &mut Scope, node: &mut Queued) {
+        match &node.node.info {
+            AstInfo::Fn(info) => {
+                let deps = &mut node.deps;
+
+                let AstInfo::Block(AstBlockKind::Params, params) = &info.params.info else {
+                    panic!("[INTERNAL ERR] `params` node is not a `Params` Block node.");
+                };
+                Self::resolve_dependencies_for_nodes(current_scope, deps, params);
+
+                let AstInfo::Block(AstBlockKind::Block, body) = &info.body.info else {
+                    panic!("[INTERNAL ERR] `body` node is not a `Block` Block node.");
+                };
+                Self::resolve_dependencies_for_nodes(current_scope, deps, body);
+            }
+            AstInfo::Var(info) => {
+                let deps = &mut node.deps;
+
+                match &info.initializer {
+                    VariableInitializer::TypeAndExpr(typ, expr) => {
+                        Self::resolve_dependencies_for_node(current_scope, deps, typ);
+                        Self::resolve_dependencies_for_node(current_scope, deps, expr);
+                    }
+                    VariableInitializer::Type(typ) => Self::resolve_dependencies_for_node(current_scope, deps, typ),
+                    VariableInitializer::Expr(expr) => Self::resolve_dependencies_for_node(current_scope, deps, expr),
+                }
+            }
+
+            AstInfo::Literal => {}
+            AstInfo::Unary(_, _) => {}
+            AstInfo::Binary(_, _, _) => {}
+            AstInfo::Block(_, _) => {}
+            AstInfo::Import(_) => {}
+        }
+    }
+
+    fn resolve_dependencies_for_nodes(current_scope: &mut Scope, deps: &mut Vec<DependencyLocator>, nodes: &[Ast]) {
+        for node in nodes {
+            Self::resolve_dependencies_for_node(current_scope, deps, node);
+        }
+    }
+
+    fn resolve_dependencies_for_node(current_scope: &mut Scope, deps: &mut Vec<DependencyLocator>, node: &Ast) {
+        todo!()
     }
 }
 
