@@ -10,7 +10,7 @@ use crate::{
         resolve_deps::Resolver,
         scoping::{FuncID, Scope, Scoper},
     },
-    ir::ast::{Ast, AstBlockKind, AstInfo},
+    ir::ast::Queued,
     parsing::parsing::parse_file,
     typing::value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoRecord},
 };
@@ -38,7 +38,7 @@ pub struct LoadedFile {
 #[derive(Debug)]
 pub struct ParsedFile {
     pub filepath: PathBuf,
-    pub ast: Ast,
+    pub ast: Vec<Queued>,
 }
 
 #[derive(Debug)]
@@ -183,7 +183,7 @@ impl Interpreter {
         let mut scoper = Scoper::new(&mut self.scopes);
 
         for file in &mut self.parsed_files {
-            let nodes = file.ast.program_nodes_mut();
+            let nodes = file.ast.iter_mut().map(|q| &mut q.node);
             scoper.establish_scope_for_file(nodes)?;
         }
 

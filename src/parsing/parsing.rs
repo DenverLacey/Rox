@@ -4,7 +4,7 @@ use crate::{
     interp::{LoadedFile, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoVar,
-        AstUnaryKind, VariableInitializer,
+        AstUnaryKind, Queued, VariableInitializer,
     },
     parsing::tokenization::*,
     util::lformat,
@@ -16,14 +16,16 @@ pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
 
     while !parser.peek_token(0)?.is_end() {
         let node = parser.parse_declaration()?;
-        nodes.push(node);
+
+        let queued = Queued::new(node);
+        nodes.push(queued);
 
         parser.skip_newline()?;
     }
 
     Ok(ParsedFile {
         filepath: file.filepath.clone(),
-        ast: Ast::new_program(nodes),
+        ast: nodes,
     })
 }
 

@@ -6,8 +6,6 @@ pub struct Ast {
     pub scope: ScopeIndex,
     pub typ: Option<Type>,
     pub info: AstInfo,
-    pub deps: Vec<DependencyLocator>,
-    pub phase: QueuedPhase,
 }
 
 #[derive(Debug)]
@@ -86,8 +84,6 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info,
-            deps: vec![],
-            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -101,8 +97,6 @@ impl Ast {
             scope: _,
             typ: _,
             info: AstInfo::Block(AstBlockKind::Program, nodes),
-            deps: _,
-            phase: _,
         } = self
         {
             return nodes.as_slice();
@@ -117,8 +111,6 @@ impl Ast {
             scope: _,
             typ: _,
             info: AstInfo::Block(AstBlockKind::Program, nodes),
-            deps: _,
-            phase: _,
         } = self
         {
             return nodes.as_mut_slice();
@@ -133,8 +125,6 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Literal,
-            deps: vec![],
-            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -144,8 +134,6 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Unary(kind, sub_expression),
-            deps: vec![],
-            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -155,8 +143,6 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Binary(kind, lhs, rhs),
-            deps: vec![],
-            phase: QueuedPhase::Parsed,
         }
     }
 
@@ -166,8 +152,6 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Block(kind, nodes),
-            deps: vec![],
-            phase: QueuedPhase::Parsed,
         }
     }
 }
@@ -178,10 +162,36 @@ pub struct DependencyLocator {
     pub queued_idx: usize,
 }
 
+impl DependencyLocator {
+    pub fn new(parsed_file_idx: usize, queued_idx: usize) -> Self {
+        Self {
+            parsed_file_idx,
+            queued_idx,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueuedPhase {
     Parsed,
     DependenciesFound,
     Typechecked,
     Compiled,
+}
+
+#[derive(Debug)]
+pub struct Queued {
+    pub node: Ast,
+    pub deps: Vec<DependencyLocator>,
+    pub phase: QueuedPhase,
+}
+
+impl Queued {
+    pub fn new(node: Ast) -> Self {
+        Self {
+            node,
+            deps: Vec::new(),
+            phase: QueuedPhase::Parsed,
+        }
+    }
 }

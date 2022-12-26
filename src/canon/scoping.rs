@@ -58,7 +58,10 @@ impl<'a> Scoper<'a> {
         Self { scopes }
     }
 
-    pub fn establish_scope_for_file(&mut self, nodes: &mut [Ast]) -> ScoperResult {
+    pub fn establish_scope_for_file<'iter>(
+        &mut self,
+        nodes: impl Iterator<Item = &'iter mut Ast>,
+    ) -> ScoperResult {
         let file_scope = self.push_scope();
         self.establish_scope_for_nodes(file_scope, nodes)
     }
@@ -81,10 +84,10 @@ impl<'a> Scoper<'a> {
         idx
     }
 
-    fn establish_scope_for_nodes(
+    fn establish_scope_for_nodes<'iter>(
         &mut self,
         current_scope: ScopeIndex,
-        nodes: &mut [Ast],
+        nodes: impl Iterator<Item = &'iter mut Ast>,
     ) -> ScoperResult {
         for node in nodes {
             self.establish_scope_for_node(current_scope, node)?;
@@ -111,10 +114,10 @@ impl<'a> Scoper<'a> {
             }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
                 let new_scope = self.push_scope_with_parent(current_scope);
-                self.establish_scope_for_nodes(new_scope, sub_nodes)?;
+                self.establish_scope_for_nodes(new_scope, sub_nodes.iter_mut())?;
             }
             AstInfo::Block(_, sub_nodes) => {
-                self.establish_scope_for_nodes(current_scope, sub_nodes)?
+                self.establish_scope_for_nodes(current_scope, sub_nodes.iter_mut())?
             }
             AstInfo::Fn(info) => {
                 let func_scope = self.push_scope_with_parent(current_scope);

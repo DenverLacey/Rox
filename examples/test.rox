@@ -10,3 +10,5 @@ fn main() {
   mut u, v = 1, 4
 }
 
+fn foo() {}
+

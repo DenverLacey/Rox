@@ -10,7 +10,7 @@ use crate::{
 
 pub struct Resolver<'files> {
     files: &'files mut Vec<ParsedFile>,
-    globals: Vec<Vec<String>>,
+    globals: Vec<Vec<Global>>,
     scopes: Vec<Scope>,
 }
 
@@ -55,15 +55,17 @@ impl<'files> Resolver<'files> {
             self.globals.push(Vec::new());
             let globals = self.globals.last_mut().unwrap();
 
-            let nodes = file.ast.program_nodes();
-            for node in nodes {
-                match &node.info {
+            for (idx, node) in file.ast.iter().enumerate() {
+                match &node.node.info {
                     AstInfo::Fn(info) => {
                         let TokenInfo::Ident(ident) = &info.ident.token.info else {
                             panic!("[INTERNAL ERR] `ident` node of `Fn` node not an `Ident` node.");
                         };
 
-                        globals.push(ident.clone());
+                        globals.push(Global {
+                            name: ident.clone(),
+                            queued_idx: idx,
+                        });
                     }
                     AstInfo::Var(info) => {
                         if matches!(info.targets.info, AstInfo::Literal) {
@@ -71,7 +73,10 @@ impl<'files> Resolver<'files> {
                                 panic!("[INTERNAL ERR] `targets` node of `Var` node notan `Ident` node but some other `Literal`.");
                             };
 
-                            globals.push(ident.clone());
+                            globals.push(Global {
+                                name: ident.clone(),
+                                queued_idx: idx,
+                            });
                         } else if let AstInfo::Block(AstBlockKind::VarDeclTargets, targets) =
                             &info.targets.info
                         {
@@ -80,7 +85,10 @@ impl<'files> Resolver<'files> {
                                     panic!("[INTERNAL ERR] One of the targets of a `VarDeclTargets` node is not an `Ident` node.");
                                 };
 
-                                globals.push(ident.clone());
+                                globals.push(Global {
+                                    name: ident.clone(),
+                                    queued_idx: idx,
+                                });
                             }
                         } else {
                             panic!("[INTERNAL ERR] `targets` node of `Var` node not an `Ident` node or a `VarDeclTargets` node.");
@@ -98,13 +106,32 @@ impl<'files> Resolver<'files> {
     }
 
     fn resolve_dependencies_for_file(&mut self, file_idx: usize) -> Result<(), &'static str> {
+        self.begin_scope();
+
+        let current_scope = self.scopes.last_mut().unwrap();
+        current_scope
+            .locators
+            .extend(self.globals[file_idx].iter().map(|global| {
+                (
+                    global.name.clone(),
+                    DependencyLocator::new(file_idx, global.queued_idx),
+                )
+            }));
+
         let file = &self.files[file_idx];
-        for (node_idx, node) in file.ast.program_nodes().iter().enumerate() {
+        for (node_idx, node) in file.ast.iter().enumerate() {
             todo!()
         }
 
+        self.end_scope();
         Ok(())
     }
+}
+
+#[derive(Debug)]
+struct Global {
+    name: String,
+    queued_idx: usize,
 }
 
 struct Scope {
