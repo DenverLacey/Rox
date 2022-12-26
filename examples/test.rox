@@ -8,7 +8,10 @@ fn main() {
   let x = 1
   let y, z = 5
   mut u, v = 1, 4
+  foo()
 }
 
-fn foo() {}
+fn foo() {
+  XXXprint "This is a dependency"
+}
 

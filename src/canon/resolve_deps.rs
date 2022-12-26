@@ -4,7 +4,7 @@ use debug_print::debug_println as dprintln;
 
 use crate::{
     interp::ParsedFile,
-    ir::ast::{AstBlockKind, AstInfo, DependencyLocator, Queued, Ast, VariableInitializer},
+    ir::ast::{Ast, AstBlockKind, AstInfo, DependencyLocator, Queued, VariableInitializer},
     parsing::tokenization::TokenInfo,
 };
 
@@ -27,15 +27,24 @@ impl<'files> Resolver<'files> {
         self.register_all_globals();
         dprintln!("Globals = {:#?}", self.globals);
 
-        if self.globals.len() <= 1 {
-            return Ok(());
-        }
-
         for file_idx in 0..self.files.len() {
             self.resolve_dependencies_for_file(file_idx)?;
         }
 
-        todo!()
+        if cfg!(debug_assertions) {
+            dprintln!("\nFound dependencies before validation:");
+            for (fi, ni, deps) in self.files.iter().enumerate().flat_map(|(fi, f)| {
+                f.ast
+                    .iter()
+                    .enumerate()
+                    .map(move |(ni, n)| (fi, ni, &n.deps))
+            }) {
+                dprintln!("({},{}):\n\t{:?}", fi, ni, deps);
+            }
+            dprintln!("");
+        }
+
+        self.detect_circular_dependencies()
     }
 }
 
@@ -45,9 +54,9 @@ impl<'files> Resolver<'files> {
     }
 
     fn end_scope(&mut self) {
-        let None = self.scopes.pop() else {
-            panic!("[INTERNAL ERR] call to `end_scope` when no scopes are present.");
-        };
+        self.scopes
+            .pop()
+            .expect("[INTERNAL ERR] call to `end_scope` when no scopes are present.");
     }
 
     fn register_all_globals(&mut self) {
@@ -150,8 +159,12 @@ impl<'files> Resolver<'files> {
                         Self::resolve_dependencies_for_node(current_scope, deps, typ);
                         Self::resolve_dependencies_for_node(current_scope, deps, expr);
                     }
-                    VariableInitializer::Type(typ) => Self::resolve_dependencies_for_node(current_scope, deps, typ),
-                    VariableInitializer::Expr(expr) => Self::resolve_dependencies_for_node(current_scope, deps, expr),
+                    VariableInitializer::Type(typ) => {
+                        Self::resolve_dependencies_for_node(current_scope, deps, typ)
+                    }
+                    VariableInitializer::Expr(expr) => {
+                        Self::resolve_dependencies_for_node(current_scope, deps, expr)
+                    }
                 }
             }
 
@@ -163,13 +176,62 @@ impl<'files> Resolver<'files> {
         }
     }
 
-    fn resolve_dependencies_for_nodes(current_scope: &mut Scope, deps: &mut Vec<DependencyLocator>, nodes: &[Ast]) {
+    fn resolve_dependencies_for_nodes(
+        current_scope: &mut Scope,
+        deps: &mut Vec<DependencyLocator>,
+        nodes: &[Ast],
+    ) {
         for node in nodes {
             Self::resolve_dependencies_for_node(current_scope, deps, node);
         }
     }
 
-    fn resolve_dependencies_for_node(current_scope: &mut Scope, deps: &mut Vec<DependencyLocator>, node: &Ast) {
+    fn resolve_dependencies_for_node(
+        current_scope: &mut Scope,
+        deps: &mut Vec<DependencyLocator>,
+        node: &Ast,
+    ) {
+        match &node.info {
+            AstInfo::Literal => match &node.token.info {
+                TokenInfo::Ident(ident) => {
+                    if let Some(dep) = current_scope.find_ident(ident) {
+                        deps.push(dep);
+                    }
+                }
+                _ => {}
+            },
+            AstInfo::Unary(_, sub_expr) => {
+                Self::resolve_dependencies_for_node(current_scope, deps, &sub_expr)
+            }
+            AstInfo::Binary(_, lhs, rhs) => {
+                Self::resolve_dependencies_for_node(current_scope, deps, &lhs);
+                Self::resolve_dependencies_for_node(current_scope, deps, &rhs);
+            }
+            AstInfo::Block(_, nodes) => {
+                Self::resolve_dependencies_for_nodes(current_scope, deps, nodes)
+            }
+            AstInfo::Fn(info) => todo!(),
+            AstInfo::Var(info) => match &info.initializer {
+                VariableInitializer::TypeAndExpr(typ, expr) => {
+                    Self::resolve_dependencies_for_node(current_scope, deps, typ);
+                    Self::resolve_dependencies_for_node(current_scope, deps, expr);
+                }
+                VariableInitializer::Type(typ) => {
+                    Self::resolve_dependencies_for_node(current_scope, deps, typ);
+                }
+                VariableInitializer::Expr(expr) => {
+                    Self::resolve_dependencies_for_node(current_scope, deps, expr);
+                }
+            },
+            AstInfo::Import(info) => todo!(),
+        }
+    }
+
+    fn detect_circular_dependencies(&self) -> Result<(), &'static str> {
+        // @NOTE:
+        // Do a depth first search to avoid having to mess around with lifting children deps up
+        // with the parents'
+        //
         todo!()
     }
 }
@@ -189,5 +251,9 @@ impl Scope {
         Self {
             locators: HashMap::new(),
         }
+    }
+
+    fn find_ident(&self, ident: &String) -> Option<DependencyLocator> {
+        self.locators.get(ident).map(|locator| *locator)
     }
 }

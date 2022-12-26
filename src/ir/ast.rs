@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type};
 
 #[derive(Debug)]
@@ -156,10 +158,16 @@ impl Ast {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct DependencyLocator {
     pub parsed_file_idx: usize,
     pub queued_idx: usize,
+}
+
+impl Debug for DependencyLocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({},{})", self.parsed_file_idx, self.queued_idx)
+    }
 }
 
 impl DependencyLocator {
