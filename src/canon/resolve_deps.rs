@@ -197,20 +197,17 @@ impl<'files> Resolver<'files> {
         node: &Ast,
     ) {
         match &node.info {
-            AstInfo::Literal => match &node.token.info {
-                TokenInfo::Ident(ident) => {
-                    if let Some(dep) = current_scope.find_ident(ident) {
-                        deps.push(dep);
-                    }
+            AstInfo::Literal => if let TokenInfo::Ident(ident) = &node.token.info {
+                if let Some(dep) = current_scope.find_ident(ident) {
+                    deps.push(dep);
                 }
-                _ => {}
-            },
+            }
             AstInfo::Unary(_, sub_expr) => {
-                Self::resolve_dependencies_for_node(current_scope, deps, &sub_expr)
+                Self::resolve_dependencies_for_node(current_scope, deps, sub_expr)
             }
             AstInfo::Binary(_, lhs, rhs) => {
-                Self::resolve_dependencies_for_node(current_scope, deps, &lhs);
-                Self::resolve_dependencies_for_node(current_scope, deps, &rhs);
+                Self::resolve_dependencies_for_node(current_scope, deps, lhs);
+                Self::resolve_dependencies_for_node(current_scope, deps, rhs);
             }
             AstInfo::Block(_, nodes) => {
                 Self::resolve_dependencies_for_nodes(current_scope, deps, nodes)
@@ -240,7 +237,7 @@ impl<'files> Resolver<'files> {
                 // @NOTE:
                 // Im not 100% sure this is correct. The thinking is functions don't have circular
                 // dependencies because of recursion kind of reasons and we'll detect actually bad
-                // circular dependencies in the other kind of noes.
+                // circular dependencies in the other kind of nodes.
                 //
                 if matches!(node.node.info, AstInfo::Fn(_)) {
                     continue;
@@ -311,6 +308,6 @@ impl Scope {
     }
 
     fn find_ident(&self, ident: &String) -> Option<DependencyLocator> {
-        self.locators.get(ident).map(|locator| *locator)
+        self.locators.get(ident).copied()
     }
 }

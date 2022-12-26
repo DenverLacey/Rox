@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type};
+use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type, interp::Interpreter};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -89,38 +89,6 @@ impl Ast {
         }
     }
 
-    pub fn new_program(nodes: Vec<Ast>) -> Self {
-        Ast::new_block(AstBlockKind::Program, Token::default(), nodes)
-    }
-
-    pub fn program_nodes(&self) -> &[Ast] {
-        if let Ast {
-            token: _,
-            scope: _,
-            typ: _,
-            info: AstInfo::Block(AstBlockKind::Program, nodes),
-        } = self
-        {
-            return nodes.as_slice();
-        } else {
-            panic!("[INTERNAL ERR] File's `ast` is not a `Program` node.");
-        }
-    }
-
-    pub fn program_nodes_mut(&mut self) -> &mut [Ast] {
-        if let Ast {
-            token: _,
-            scope: _,
-            typ: _,
-            info: AstInfo::Block(AstBlockKind::Program, nodes),
-        } = self
-        {
-            return nodes.as_mut_slice();
-        } else {
-            panic!("[INTERNAL ERR] File's `ast` is not a `Program` node.");
-        }
-    }
-
     pub fn new_literal(token: Token) -> Self {
         Self {
             token,
@@ -179,7 +147,7 @@ impl DependencyLocator {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum QueuedPhase {
     Parsed,
     DependenciesFound,
@@ -202,5 +170,22 @@ impl Queued {
             deps: Vec::new(),
             phase: QueuedPhase::Parsed,
         }
+    }
+
+    pub fn all_dependencies_typechecked(&self) -> bool {
+        let interp = Interpreter::get();
+
+        for dep in &self.deps {
+            let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
+            if dep.phase < QueuedPhase::PartiallyTypechecked {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn is_typechecked(&self) -> bool {
+        self.phase >= QueuedPhase::Typechecked
     }
 }

@@ -17,7 +17,14 @@ fn foo() {
 }
 
 # These are examples of circular dependencies
-# and should not compile.
+# that should not compile.
 # let x = y + 1
 # let y = x - 1
 # let z = z + 1
+# let bar = calls_baz() - 1
+# fn calls_baz() {
+#   baz()
+# } 
+# fn baz() {
+#   let barf = bar + 1
+# } 
