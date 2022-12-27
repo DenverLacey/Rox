@@ -35,6 +35,7 @@ impl Type {
                     TypeInfo::Record(info) => {
                         info.fields.iter().map(|field| field.typ.size()).sum()
                     }
+                    TypeInfo::Function(_) => std::mem::size_of::<*const ()>(),
                 }
             }
         }
@@ -51,6 +52,7 @@ impl Display for Type {
 pub enum TypeInfo {
     Array(TypeInfoArray),
     Record(TypeInfoRecord),
+    Function(TypeInfoFunction),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,6 +71,12 @@ pub struct TypeInfoRecord {
 pub struct RecordField {
     pub name: String,
     pub typ: Type,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeInfoFunction {
+    pub params: Box<[Type]>,
+    pub returns: Option<Type>, // @TODO: Multiple returns
 }
 
 pub mod runtime_type {

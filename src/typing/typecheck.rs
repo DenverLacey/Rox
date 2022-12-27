@@ -1,5 +1,5 @@
 use crate::{
-    canon::scoping::{Scope, ScopeBinding, VariableBinding},
+    canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
@@ -9,15 +9,19 @@ use crate::{
     util::lformat,
 };
 
-use super::value_type::Type;
+use super::value_type::{Type, TypeInfoFunction};
 
 pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     let mut typecheck_complete = false;
     while !typecheck_complete {
         typecheck_complete = true;
 
+        // @TODO:
+        // As it is currently, functions won't be fully typechecked unless there is one last thing
+        // that causes a final loop over the queued nodes.
+        //
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
-            if !queued.all_dependencies_typechecked() {
+            if !queued.all_dependencies_typechecked() && !matches!(queued.node.info, AstInfo::Fn(_)) {
                 typecheck_complete = false;
                 continue;
             } else if queued.is_typechecked() {
@@ -134,11 +138,11 @@ fn typecheck_var_decl(
         is_mut: info.mutable,
         typ: var_type,
     });
-
-    if scope.bindings.contains_key(ident) {
-        return Err(lformat!("Redeclaration of `{}`.", ident));
-    }
-    scope.bindings.insert(ident.clone(), binding);
+    scope.add_binding(
+        ident.clone(),
+        binding,
+        lformat!("Redeclaration of `{}`", ident),
+    )?;
 
     Ok(())
 }
@@ -148,7 +152,75 @@ fn typecheck_fn_header(
     token: &Token,
     info: &mut AstInfoFn,
 ) -> Result<(), &'static str> {
-    todo!()
+    let interp = Interpreter::get_mut();
+
+    let TokenInfo::Ident(ident) = &info.ident.token.info else {
+        panic!("[INTERNAL ERR] `ident` node in fn decl is not an `Ident` node.");
+    };
+
+    let AstInfo::Block(AstBlockKind::Params, params) = &mut info.params.info else {
+        panic!("[INTERNAL ERR] `params` node of fn decl node not a `Params` node.");
+    };
+
+    let mut return_type = None;
+    let mut param_types = vec![];
+
+    for param in params {
+        let AstInfo::Binary(AstBinaryKind::Param, name, typ) = &mut param.info else {
+            panic!("[INTERNAL ERR] Node in `params` of fn decl was not a `Param` node.");
+        };
+
+        let TokenInfo::Ident(param_name) = &name.token.info else {
+            panic!("[INTERNAL ERR] Name of paramter was not an `Ident` node.");
+        };
+
+        typecheck_node(interp, typ)?;
+        if !matches!(typ.typ, Some(Type::Type)) {
+            return Err("Expression expected to be a type for a function parameter.");
+        }
+
+        let AstInfo::TypeValue(param_type) = typ.info else {
+            unreachable!();
+        };
+
+        // @TODO: Mutable parameters?
+        let param_binding = ScopeBinding::Var(VariableBinding {
+            is_mut: false,
+            typ: param_type,
+        });
+
+        let param_scope = &mut interp.scopes[info.params.scope.0];
+        param_scope.add_binding(
+            param_name.clone(),
+            param_binding,
+            lformat!(
+                "There is already a parameter with the name `{}`.",
+                param_name
+            ),
+        )?;
+
+        param_types.push(param_type);
+    }
+
+    let fn_info = TypeInfoFunction {
+        params: param_types.into_boxed_slice(),
+        returns: return_type,
+    };
+
+    let fn_type = interp.create_or_get_function_type(fn_info);
+    let fn_id = interp.create_function(ident, fn_type);
+
+    let binding = ScopeBinding::Fn(FunctionBinding {
+        id: fn_id,
+        typ: fn_type,
+    });
+    scope.add_binding(
+        ident.clone(),
+        binding,
+        lformat!("Redeclaration of `{}`.", ident),
+    )?;
+
+    Ok(())
 }
 
 fn typecheck_fn_body(

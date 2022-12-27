@@ -14,7 +14,7 @@ use crate::{
     parsing::parsing::parse_file,
     typing::{
         typecheck::typecheck_files,
-        value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoRecord},
+        value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoRecord},
     },
 };
 
@@ -104,13 +104,13 @@ impl Interpreter {
 }
 
 impl Interpreter {
-    pub fn create_function(&mut self) -> FuncID {
+    pub fn create_function(&mut self, name: impl Into<String>, typ: Type) -> FuncID {
         let func_id = FuncID(self.funcs.len());
 
         let info = FunctionInfo {
             id: func_id,
-            name: String::new(),
-            typ: Type::Composite(0),
+            name: name.into(),
+            typ,
             code: None,
         };
 
@@ -138,6 +138,23 @@ impl Interpreter {
     pub fn create_record_type(&mut self, info: TypeInfoRecord) -> Type {
         let idx = self.types.len();
         let new_type = TypeInfo::Record(info);
+        self.types.push(new_type);
+
+        Type::Composite(idx)
+    }
+
+    pub fn create_or_get_function_type(&mut self, info: TypeInfoFunction) -> Type {
+        for (idx, typ) in self.types.iter().enumerate() {
+            if let TypeInfo::Function(typ_info) = typ {
+                if info.returns == typ_info.returns && info.params.iter().eq(typ_info.params.iter())
+                {
+                    return Type::Composite(idx);
+                }
+            }
+        }
+
+        let idx = self.types.len();
+        let new_type = TypeInfo::Function(info);
         self.types.push(new_type);
 
         Type::Composite(idx)

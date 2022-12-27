@@ -43,6 +43,20 @@ impl Scope {
 
         None
     }
+
+    pub fn add_binding(
+        &mut self,
+        ident: String,
+        binding: ScopeBinding,
+        err: &'static str,
+    ) -> Result<(), &'static str> {
+        if self.bindings.contains_key(&ident) {
+            return Err(err);
+        }
+        self.bindings.insert(ident, binding);
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

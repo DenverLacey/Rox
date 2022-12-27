@@ -6,18 +6,18 @@
 let y = x
 let x = 1
 
-# fn main() {
-#   XXXprint 1.5
-#   let x = 1
-#   let y, z = 5
-#   mut u, v = 1, 4
-#   foo()
-# }
-# 
-# fn foo() {
-#   XXXprint "This is a dependency"
-#   main()
-# }
+fn main() {
+  XXXprint 1.5
+  let x = 1
+  let y, z = 5
+  mut u, v = 1, 4
+  foo()
+}
+
+fn foo() {
+  XXXprint "This is a dependency"
+  main()
+}
 
 # These are examples of circular dependencies
 # that should not compile.
