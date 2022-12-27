@@ -73,6 +73,7 @@ impl Interpreter {
 
     pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         self.parse_program(path)?;
+
         self.establish_scopes()?;
 
         if cfg!(debug_assertions) {
@@ -87,7 +88,12 @@ impl Interpreter {
         }
 
         self.resolve_dependencies()?;
+
         typecheck_files(&mut self.parsed_files)?;
+        dprintln!(
+            "typechecked ast:\n{:#?}",
+            self.parsed_files.first().unwrap().ast
+        );
 
         Ok(())
     }

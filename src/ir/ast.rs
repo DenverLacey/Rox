@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use crate::{canon::scoping::ScopeIndex, parsing::tokenization::Token, typing::value_type::Type, interp::Interpreter};
+use crate::{
+    canon::scoping::ScopeIndex, interp::Interpreter, parsing::tokenization::Token,
+    typing::value_type::Type,
+};
 
 #[derive(Debug)]
 pub struct Ast {
@@ -19,6 +22,7 @@ pub enum AstInfo {
     Fn(Box<AstInfoFn>),
     Var(Box<AstInfoVar>),
     Import(Box<AstInfoImport>),
+    TypeValue(Type),
 }
 
 #[derive(Clone, Copy, Debug)]

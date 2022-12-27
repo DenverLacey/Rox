@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    interp::Interpreter,
     ir::ast::{Ast, AstBlockKind, AstInfo, VariableInitializer},
     typing::value_type::Type,
 };
@@ -28,10 +29,26 @@ impl Scope {
     }
 }
 
+impl Scope {
+    pub fn find_binding(&self, ident: &str) -> Option<&ScopeBinding> {
+        if let Some(binding) = self.bindings.get(ident) {
+            return Some(binding);
+        }
+
+        if let Some(parent) = self.parent {
+            let interp = Interpreter::get();
+            let parent = &interp.scopes[parent.0];
+            return parent.find_binding(ident);
+        }
+
+        None
+    }
+}
+
 #[derive(Debug)]
 pub enum ScopeBinding {
     Var(VariableBinding),
-    Func(FunctionBinding),
+    Fn(FunctionBinding),
 }
 
 #[derive(Debug)]
@@ -161,6 +178,7 @@ impl<'a> Scoper<'a> {
                     self.establish_scope_for_node(current_scope, ex)?;
                 }
             }
+            AstInfo::TypeValue(_) => unreachable!(),
         }
 
         Ok(())

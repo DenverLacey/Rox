@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::interp::Interpreter;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7,6 +9,7 @@ pub enum Type {
     Int,
     Float,
     String,
+    Type,
     Composite(usize),
 }
 
@@ -18,6 +21,7 @@ impl Type {
             Self::Int => std::mem::size_of::<runtime_type::Int>(),
             Self::Float => std::mem::size_of::<runtime_type::Float>(),
             Self::String => std::mem::size_of::<runtime_type::String>(),
+            Self::Type => std::mem::size_of::<*const ()>(), // @TEMP
             Self::Composite(idx) => {
                 let interp = Interpreter::get();
                 let typ = &interp.types[*idx];
@@ -34,6 +38,12 @@ impl Type {
                 }
             }
         }
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
