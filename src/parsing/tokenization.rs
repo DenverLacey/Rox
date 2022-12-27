@@ -322,7 +322,12 @@ impl<'file> Tokenizer<'file> {
 
         let mut word = String::new();
         while self.peek_char().is_ascii_digit() {
-            word.push(self.next_char());
+            let c = self.next_char();
+            if c == '_' {
+                continue;
+            }
+
+            word.push(c);
         }
 
         let info = if self.peek_char() == '.'
@@ -332,7 +337,11 @@ impl<'file> Tokenizer<'file> {
             self.next_char();
 
             while self.peek_char().is_ascii_digit() {
-                word.push(self.next_char());
+                let c = self.next_char();
+                if c == '_' {
+                    continue;
+                }
+                word.push(c);
             }
 
             let f = word.parse().map_err(|_| "Failed to parse number.")?;
