@@ -182,6 +182,7 @@ pub enum QueuedProgress {
 pub struct Queued {
     pub node: Ast,
     pub deps: Vec<Dependency>,
+    pub inner_deps: Vec<Dependency>,
     pub progress: QueuedProgress,
 }
 
@@ -190,6 +191,7 @@ impl Queued {
         Self {
             node,
             deps: Vec::new(),
+            inner_deps: Vec::new(),
             progress: QueuedProgress::Parsed,
         }
     }

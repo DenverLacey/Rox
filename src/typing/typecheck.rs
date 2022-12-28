@@ -3,7 +3,7 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Queued, QueuedProgress, VariableInitializer,
+        AstUnaryKind, Dependency, Queued, QueuedProgress, VariableInitializer,
     },
     parsing::tokenization::{Token, TokenInfo},
     util::lformat,
@@ -15,11 +15,7 @@ pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     let mut queued_remaining: usize = files.iter().map(|file| file.ast.len()).sum();
     while queued_remaining != 0 {
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
-            // @TODO: Fix this.
-            // Dependencies of signature and body get lumped together so we can't
-            // tell when it's safe to typecheck *just* the signature. It's either we can typecheck
-            // everything or nothing.
-            if !queued.all_dependencies_typechecked() || queued.is_typechecked() {
+            if !queued_ready_for_typecheck(queued) || queued.is_typechecked() {
                 continue;
             }
 
@@ -31,6 +27,27 @@ pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     }
 
     Ok(())
+}
+
+pub fn queued_ready_for_typecheck(queued: &Queued) -> bool {
+    let interp = Interpreter::get();
+
+    let deps = if matches!(queued.node.info, AstInfo::Fn(_))
+        && queued.progress == QueuedProgress::PartiallyTypechecked
+    {
+        &queued.inner_deps
+    } else {
+        &queued.deps
+    };
+
+    for dep in deps {
+        let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
+        if dep.progress < QueuedProgress::PartiallyTypechecked {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {

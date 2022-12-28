@@ -38,10 +38,13 @@ impl<'files> Resolver<'files> {
         if cfg!(debug_assertions) {
             dprintln!("\nFound dependencies before validation:");
             for (fi, ni, deps) in self.files.iter().enumerate().flat_map(|(fi, f)| {
-                f.ast
-                    .iter()
-                    .enumerate()
-                    .map(move |(ni, n)| (fi, ni, &n.deps))
+                f.ast.iter().enumerate().map(move |(ni, n)| {
+                    (
+                        fi,
+                        ni,
+                        n.deps.iter().chain(n.inner_deps.iter()).collect::<Vec<_>>(),
+                    )
+                })
             }) {
                 dprintln!("({},{}):\n\t{:?}", fi, ni, deps);
             }
@@ -146,6 +149,7 @@ impl<'files> Resolver<'files> {
         match &node.node.info {
             AstInfo::Fn(info) => {
                 let deps = &mut node.deps;
+                let inner_deps = &mut node.inner_deps;
 
                 let AstInfo::Block(AstBlockKind::Params, params) = &info.params.info else {
                     panic!("[INTERNAL ERR] `params` node is not a `Params` Block node.");
@@ -155,7 +159,7 @@ impl<'files> Resolver<'files> {
                 let AstInfo::Block(AstBlockKind::Block, body) = &info.body.info else {
                     panic!("[INTERNAL ERR] `body` node is not a `Block` Block node.");
                 };
-                Self::resolve_dependencies_for_nodes(current_scope, deps, body);
+                Self::resolve_dependencies_for_nodes(current_scope, inner_deps, body);
             }
             AstInfo::Var(info) => {
                 let deps = &mut node.deps;
@@ -253,17 +257,8 @@ impl<'files> Resolver<'files> {
         for file_idx in 0..self.files.len() {
             let len_nodes = self.files[file_idx].ast.len();
             for node_idx in 0..len_nodes {
-                let node = &self.files[file_idx].ast[node_idx];
-                // @NOTE:
-                // Im not 100% sure this is correct. The thinking is functions don't have circular
-                // dependencies because of recursion kind of reasons and we'll detect actually bad
-                // circular dependencies in the other kind of nodes.
-                //
-                if matches!(node.node.info, AstInfo::Fn(_)) {
-                    continue;
-                }
-
-                self.detect_circular_dependencies_for_queued(Dependency::new(file_idx, node_idx))?;
+                let queued_loc = Dependency::new(file_idx, node_idx);
+                self.detect_circular_dependencies_for_queued(queued_loc)?;
             }
         }
 
@@ -274,7 +269,9 @@ impl<'files> Resolver<'files> {
         &self,
         queued_loc: Dependency,
     ) -> Result<(), &'static str> {
-        let deps = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx].deps;
+        let queued = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx];
+        let deps = &queued.deps;
+
         for &dep in deps {
             self.detect_circular_dependency(queued_loc, dep, dep)?;
         }
@@ -299,9 +296,19 @@ impl<'files> Resolver<'files> {
             ));
         }
 
-        let deps = &self.files[dep.parsed_file_idx].ast[dep.queued_idx].deps;
-        for child_dep in deps {
-            self.detect_circular_dependency(needle, parent_dep, *child_dep)?;
+        let needle_node = &self.files[needle.parsed_file_idx].ast[needle.queued_idx];
+        let dep = &self.files[dep.parsed_file_idx].ast[dep.queued_idx];
+        let deps = &dep.deps;
+        let inner_deps = &dep.inner_deps;
+
+        for &child_dep in deps {
+            self.detect_circular_dependency(needle, parent_dep, child_dep)?;
+        }
+
+        if !matches!(needle_node.node.info, AstInfo::Fn(_)) {
+            for &child_dep in inner_deps {
+                self.detect_circular_dependency(needle, parent_dep, child_dep)?;
+            }
         }
 
         Ok(())

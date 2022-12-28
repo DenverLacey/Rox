@@ -12,7 +12,7 @@ fn main() {
   let x = 1
 #  let y, z = 5
 #  mut u, v = 1, 4
-#  foo()
+  foo()
   let sum = add(4, 9)
   XXXprint negative
 }
