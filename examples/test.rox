@@ -3,21 +3,33 @@
 # import "std/collections/stack" exposing { Stack }
 # import "std/collections/queue"
 
-let y = x
+let y = x + 1
 let x = 1
+let p: &Int = &y
+let r = p()
 
-fn main() {
-  XXXprint 1.5
-  let x = 1
-  let y, z = 5
-  mut u, v = 1, 4
-  foo()
-}
-
-fn foo() {
-  XXXprint "This is a dependency"
-  main()
-}
+# fn main() {
+#   XXXprint 1.5
+#   let x = 1
+# #  let y, z = 5
+# #  mut u, v = 1, 4
+#   foo()
+# }
+# 
+# fn foo() {
+#   XXXprint "This is a dependency"
+#   main()
+# }
+# 
+# fn add(a: Int, b: Int): Int {
+#   a + b
+# }
+# 
+# fn swap(a: &Int, b: &Int) {
+#   let t = *a
+#   *a = *b
+#   *b = t
+# }
 
 # These are examples of circular dependencies
 # that should not compile.

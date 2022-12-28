@@ -14,7 +14,9 @@ use crate::{
     parsing::parsing::parse_file,
     typing::{
         typecheck::typecheck_files,
-        value_type::{Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoRecord},
+        value_type::{
+            Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
+        },
     },
 };
 
@@ -91,7 +93,7 @@ impl Interpreter {
 
         typecheck_files(&mut self.parsed_files)?;
         dprintln!(
-            "typechecked ast:\n{:#?}",
+            "typechecked ast:\n{:?}\n",
             self.parsed_files.first().unwrap().ast
         );
 
@@ -119,10 +121,26 @@ impl Interpreter {
         func_id
     }
 
-    pub fn create_or_get_array_type(&mut self, info: TypeInfoArray) -> Type {
+    pub fn get_or_create_pointer_type(&mut self, info: TypeInfoPointer) -> Type {
         for (idx, typ) in self.types.iter().enumerate() {
-            if let TypeInfo::Array(typ_info) = typ {
-                if typ_info.size == info.size && typ_info.element_type == info.element_type {
+            if let TypeInfo::Pointer(type_info) = typ {
+                if *type_info == info {
+                    return Type::Composite(idx);
+                }
+            }
+        }
+
+        let idx = self.types.len();
+        let new_type = TypeInfo::Pointer(info);
+        self.types.push(new_type);
+
+        Type::Composite(idx)
+    }
+
+    pub fn get_or_create_array_type(&mut self, info: TypeInfoArray) -> Type {
+        for (idx, typ) in self.types.iter().enumerate() {
+            if let TypeInfo::Array(type_info) = typ {
+                if *type_info == info {
                     return Type::Composite(idx);
                 }
             }
@@ -143,10 +161,11 @@ impl Interpreter {
         Type::Composite(idx)
     }
 
-    pub fn create_or_get_function_type(&mut self, info: TypeInfoFunction) -> Type {
+    pub fn get_or_create_function_type(&mut self, info: TypeInfoFunction) -> Type {
         for (idx, typ) in self.types.iter().enumerate() {
-            if let TypeInfo::Function(typ_info) = typ {
-                if info.returns == typ_info.returns && info.params.iter().eq(typ_info.params.iter())
+            if let TypeInfo::Function(type_info) = typ {
+                if info.returns == type_info.returns
+                    && info.params.iter().eq(type_info.params.iter())
                 {
                     return Type::Composite(idx);
                 }
@@ -208,6 +227,7 @@ impl Interpreter {
 
     fn establish_scopes(&mut self) -> Result<(), &'static str> {
         let mut scoper = Scoper::new(&mut self.scopes);
+        scoper.load_prelude();
 
         for file in &mut self.parsed_files {
             let nodes = file.ast.iter_mut().map(|q| &mut q.node);

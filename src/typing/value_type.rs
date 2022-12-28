@@ -27,6 +27,7 @@ impl Type {
                 let typ = &interp.types[*idx];
 
                 match typ {
+                    TypeInfo::Pointer(_) => std::mem::size_of::<*const ()>(),
                     TypeInfo::Array(info) => {
                         let count = info.size;
                         let element_size = info.element_type.size();
@@ -40,19 +41,75 @@ impl Type {
             }
         }
     }
+
+    pub fn is_pointer(&self) -> bool {
+        if let Self::Composite(idx) = *self {
+            let interp = Interpreter::get();
+            let typ = &interp.types[idx];
+
+            if matches!(typ, TypeInfo::Pointer(_)) {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match *self {
+            Self::Bool | Self::Char | Self::Int | Self::Float | Self::String | Self::Type => {
+                write!(f, "{:?}", self)
+            }
+            Self::Composite(idx) => {
+                let interp = Interpreter::get();
+                let typ = &interp.types[idx];
+                match typ {
+                    TypeInfo::Pointer(info) => {
+                        let mut_str = if info.mutable_pointee { "mut " } else { "" };
+                        write!(f, "&{}{}", mut_str, info.pointee_type)
+                    }
+                    TypeInfo::Array(info) => {
+                        write!(f, "[{}]{}", info.size, info.element_type)
+                    }
+                    TypeInfo::Record(info) => {
+                        write!(f, "{}", info.name)
+                    }
+                    TypeInfo::Function(info) => {
+                        write!(f, "fn(")?;
+
+                        for (i, param) in info.params.iter().enumerate() {
+                            write!(f, "{}", param)?;
+                            if i + 1 < info.params.len() {
+                                write!(f, ", ")?;
+                            }
+                        }
+
+                        if let Some(return_type) = info.returns {
+                            write!(f, "): {}", return_type)
+                        } else {
+                            write!(f, ")")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum TypeInfo {
+    Pointer(TypeInfoPointer),
     Array(TypeInfoArray),
     Record(TypeInfoRecord),
     Function(TypeInfoFunction),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TypeInfoPointer {
+    pub mutable_pointee: bool,
+    pub pointee_type: Type,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -46,16 +46,24 @@ impl Scope {
 
     pub fn add_binding(
         &mut self,
-        ident: String,
+        ident: impl Into<String>,
         binding: ScopeBinding,
         err: &'static str,
     ) -> Result<(), &'static str> {
+        let ident = ident.into();
+
         if self.bindings.contains_key(&ident) {
             return Err(err);
         }
-        self.bindings.insert(ident, binding);
+
+        self.add_binding_unchecked(ident, binding);
 
         Ok(())
+    }
+
+    pub fn add_binding_unchecked(&mut self, ident: impl Into<String>, binding: ScopeBinding) {
+        let ident = ident.into();
+        self.bindings.insert(ident, binding);
     }
 }
 
@@ -63,6 +71,7 @@ impl Scope {
 pub enum ScopeBinding {
     Var(VariableBinding),
     Fn(FunctionBinding),
+    Type(Type),
 }
 
 #[derive(Debug)]
@@ -89,11 +98,27 @@ impl<'a> Scoper<'a> {
         Self { scopes }
     }
 
+    pub fn load_prelude(&mut self) {
+        let mut prelude = Scope::new();
+
+        prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::Bool));
+        prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::Int));
+        prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::Float));
+        prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::String));
+        prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::Type));
+
+        if self.scopes.is_empty() {
+            self.scopes.push(prelude);
+        } else {
+            self.scopes[0] = prelude;
+        }
+    }
+
     pub fn establish_scope_for_file<'iter>(
         &mut self,
         nodes: impl Iterator<Item = &'iter mut Ast>,
     ) -> ScoperResult {
-        let file_scope = self.push_scope();
+        let file_scope = self.push_scope(ScopeIndex(0));
         self.establish_scope_for_nodes(file_scope, nodes)
     }
 }
@@ -101,14 +126,7 @@ impl<'a> Scoper<'a> {
 type ScoperResult = Result<(), &'static str>;
 
 impl<'a> Scoper<'a> {
-    fn push_scope(&mut self) -> ScopeIndex {
-        let idx = ScopeIndex(self.scopes.len());
-        self.scopes.push(Scope::new());
-
-        idx
-    }
-
-    fn push_scope_with_parent(&mut self, parent: ScopeIndex) -> ScopeIndex {
+    fn push_scope(&mut self, parent: ScopeIndex) -> ScopeIndex {
         let idx = ScopeIndex(self.scopes.len());
         self.scopes.push(Scope::with_parent(parent));
 
@@ -144,14 +162,14 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(current_scope, rhs.as_mut())?;
             }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
-                let new_scope = self.push_scope_with_parent(current_scope);
+                let new_scope = self.push_scope(current_scope);
                 self.establish_scope_for_nodes(new_scope, sub_nodes.iter_mut())?;
             }
             AstInfo::Block(_, sub_nodes) => {
                 self.establish_scope_for_nodes(current_scope, sub_nodes.iter_mut())?
             }
             AstInfo::Fn(info) => {
-                let func_scope = self.push_scope_with_parent(current_scope);
+                let func_scope = self.push_scope(current_scope);
                 self.establish_scope_for_node(func_scope, &mut info.params)?;
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }

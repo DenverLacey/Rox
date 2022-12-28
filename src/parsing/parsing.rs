@@ -147,6 +147,12 @@ impl<'file> Parser<'file> {
 
         let params = self.parse_params()?;
 
+        let returns = if self.match_token(TokenInfoTag::Colon)? {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
         let body = self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?;
 
         Ok(Ast::new(
@@ -154,6 +160,7 @@ impl<'file> Parser<'file> {
             AstInfo::Fn(Box::new(AstInfoFn {
                 ident,
                 params,
+                returns,
                 body,
             })),
         ))
@@ -333,11 +340,13 @@ impl<'file> Parser<'file> {
         ))
     }
 
-    // @TODO: Fix this! Why are we erroring on assignment nodes?
     fn parse_statement_or_assignment(&mut self) -> ParseResult {
-        let node = self.parse_statement()?;
-        if matches!(node.info, AstInfo::Binary(AstBinaryKind::Assign, _, _)) {
-            return Err("Cannot assign in expression context.");
+        let mut node = self.parse_statement()?;
+
+        if self.check_token(TokenInfoTag::Equal)? {
+            let token = self.next_token().expect("Already peeked.");
+            let prec = token.info.precedence();
+            node = self.parse_binary(AstBinaryKind::Assign, token, prec, Box::new(node))?;
         }
 
         Ok(node)
@@ -400,6 +409,8 @@ impl<'file> Parser<'file> {
             }
             TokenInfo::Bang => self.parse_unary(AstUnaryKind::Not, token),
             TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token),
+            TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
+            TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
             TokenInfo::XXXPrint => self.parse_unary(AstUnaryKind::XXXPrint, token),
             _ => Err(lformat!(
                 "Encountered a non-prefix token `{:?}` in prefix position.",
@@ -452,9 +463,6 @@ impl<'file> Parser<'file> {
             }
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
-            }
-            TokenInfo::Equal => {
-                self.parse_binary(AstBinaryKind::Assign, token, prec, Box::new(previous))
             }
             _ => Err(lformat!(
                 "Encountered a non-infix token `{:?}` in infix position.",

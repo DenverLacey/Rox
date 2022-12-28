@@ -29,6 +29,9 @@ pub enum AstInfo {
 pub enum AstUnaryKind {
     Neg,
     Not,
+    Ref,
+    RefMut,
+    Deref,
     XXXPrint,
 }
 
@@ -47,7 +50,6 @@ pub enum AstBinaryKind {
 
 #[derive(Clone, Copy, Debug)]
 pub enum AstBlockKind {
-    Program,
     Block,
     Comma,
     Params,
@@ -59,6 +61,7 @@ pub enum AstBlockKind {
 pub struct AstInfoFn {
     pub ident: Ast,
     pub params: Ast,
+    pub returns: Option<Ast>,
     pub body: Ast,
 }
 

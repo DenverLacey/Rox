@@ -57,6 +57,7 @@ pub enum TokenInfo {
     Percent,
     Bang,
     Equal,
+    Ampersand,
 
     // Keywords
     Import,
@@ -91,7 +92,8 @@ impl TokenInfo {
             TokenInfo::Slash => TokenPrecedence::Factor,
             TokenInfo::Percent => TokenPrecedence::Factor,
             TokenInfo::Bang => TokenPrecedence::Unary,
-            TokenInfo::Equal => TokenPrecedence::Assignment,
+            TokenInfo::Equal => TokenPrecedence::None,
+            TokenInfo::Ampersand => TokenPrecedence::BitAnd,
             TokenInfo::Import => TokenPrecedence::None,
             TokenInfo::Let => TokenPrecedence::None,
             TokenInfo::Mut => TokenPrecedence::None,
@@ -397,6 +399,7 @@ impl<'file> Tokenizer<'file> {
             '%' => TokenInfo::Percent,
             '!' => TokenInfo::Bang,
             '=' => TokenInfo::Equal,
+            '&' => TokenInfo::Ampersand,
 
             _ => return Err("Invalid operator."),
         };
