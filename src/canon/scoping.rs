@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     interp::Interpreter,
-    ir::ast::{Ast, AstBlockKind, AstInfo, VariableInitializer},
+    ir::ast::{Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, VariableInitializer},
     typing::value_type::Type,
 };
 
@@ -211,6 +211,18 @@ impl<'a> Scoper<'a> {
                 }
             }
             AstInfo::TypeValue(_) => unreachable!(),
+            AstInfo::TypeSignature(sig) => match sig.as_mut() {
+                AstInfoTypeSignature::Function(params, returns) => {
+                    let AstInfo::Block(AstBlockKind::Params, params) = &mut params.info else {
+                        panic!("[INTERNAL ERR] `params` node of type signature was not a `Params` node.");
+                    };
+                    self.establish_scope_for_nodes(current_scope, params.iter_mut())?;
+
+                    if let Some(returns) = returns {
+                        self.establish_scope_for_node(current_scope, returns)?;
+                    }
+                }
+            },
         }
 
         Ok(())

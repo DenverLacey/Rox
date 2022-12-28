@@ -2,8 +2,8 @@ use crate::{
     canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
-        QueuedProgress, VariableInitializer,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
+        AstUnaryKind, Queued, QueuedProgress, VariableInitializer,
     },
     parsing::tokenization::{Token, TokenInfo},
     util::lformat,
@@ -15,7 +15,11 @@ pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     let mut queued_remaining: usize = files.iter().map(|file| file.ast.len()).sum();
     while queued_remaining != 0 {
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
-            if queued_not_ready_for_typechecking(queued) || queued.is_typechecked() {
+            // @TODO: Fix this.
+            // Dependencies of signature and body get lumped together so we can't
+            // tell when it's safe to typecheck *just* the signature. It's either we can typecheck
+            // everything or nothing.
+            if !queued.all_dependencies_typechecked() || queued.is_typechecked() {
                 continue;
             }
 
@@ -27,10 +31,6 @@ pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     }
 
     Ok(())
-}
-
-fn queued_not_ready_for_typechecking(queued: &Queued) -> bool {
-    !queued.all_dependencies_typechecked() && !matches!(queued.node.info, AstInfo::Fn(_))
 }
 
 fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {
@@ -270,6 +270,45 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<(), &'stat
         AstInfo::Fn(info) => todo!(),
         AstInfo::Import(info) => todo!(),
         AstInfo::TypeValue(_) => {}
+        AstInfo::TypeSignature(sig) => match sig.as_mut() {
+            AstInfoTypeSignature::Function(params, returns) => {
+                typecheck_node(interp, params)?;
+
+                let AstInfo::Block(AstBlockKind::Params, params) = &params.info else {
+                    panic!("[INTERNAL ERR] `params` node isn't a `Params` node in type signature.");
+                };
+
+                let param_types = params.iter().enumerate().map(|(i, param)| {
+                    let AstInfo::TypeValue(param_type) = &param.info else {
+                        return Err(lformat!("Parameter {} in type signature is not a type.", i + 1));
+                    };
+                    Ok(*param_type)
+                }).collect::<Result<Vec<_>, _>>()?.into_boxed_slice();
+
+                let return_type = if let Some(returns) = returns {
+                    typecheck_node(interp, returns)?;
+                    let AstInfo::TypeValue(return_type) = &returns.info else {
+                        return Err(lformat!(
+                            "Return type expression of function type signature was not a type but a `{}` value.",
+                            returns.typ.expect("[INTERNAL ERR] `returns` node doesn't have a type."
+                        )));
+                    };
+
+                    Some(*return_type)
+                } else {
+                    None
+                };
+
+                let fn_type = TypeInfoFunction {
+                    params: param_types,
+                    returns: return_type,
+                };
+
+                let fn_type = interp.get_or_create_function_type(fn_type);
+                node.typ = Some(Type::Type);
+                node.info = AstInfo::TypeValue(fn_type);
+            }
+        },
     }
 
     Ok(())
@@ -581,7 +620,29 @@ fn typecheck_binary(
             Some(lhs_type)
         }
         AstBinaryKind::Assign => {
-            todo!()
+            typecheck_node(interp, lhs)?;
+            typecheck_node(interp, rhs)?;
+
+            let Some(lhs_type) = lhs.typ else {
+                return Err("Expected left hand side expression of assignment to have a value but found no value.");
+            };
+
+            let Some(rhs_type) = rhs.typ else {
+                return Err("Expected left hand side expression of assignment to have a value but found no value.");
+            };
+
+            // @TODO:
+            // Enforce immutability
+            //
+            if lhs_type != rhs_type {
+                return Err(lformat!(
+                    "Cannot assign a `{}` value to something of type `{}`.",
+                    rhs_type,
+                    lhs_type
+                ));
+            }
+
+            None
         }
         AstBinaryKind::Call => {
             typecheck_node(interp, lhs)?;
@@ -606,17 +667,14 @@ fn typecheck_binary(
                 return Err(lformat!("Incorrect number of arguments for function call. Expected {} arguments but was given {}.", fn_info.params.len(), args.len()));
             }
 
-            for (i, (&expected, given)) in fn_info
-                .params
-                .iter()
-                .zip(args.iter().map(|arg| {
-                    arg.typ
-                        .expect("[INTERNAL ERR] function argument doesn't have a type.")
-                }))
-                .enumerate()
-            {
+            for i in 0..args.len() {
+                let given = args[i]
+                    .typ
+                    .expect("[INTERNAL ERR] argument doesn't have a type.");
+                let expected = fn_info.params[i];
+
                 if given != expected {
-                    return Err(lformat!("Argument {} of function call expected to be a `{}` value but was a `{}` value.", i, expected, given));
+                    return Err(lformat!("Argument {} of function call expected to be a `{}` value but was a `{}` value.", i + 1, expected, given));
                 }
             }
 

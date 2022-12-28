@@ -3,8 +3,8 @@ use enum_tags::TaggedEnum;
 use crate::{
     interp::{LoadedFile, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoVar,
-        AstUnaryKind, Queued, VariableInitializer,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoTypeSignature,
+        AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
     },
     parsing::tokenization::*,
     util::lformat,
@@ -139,7 +139,7 @@ impl<'file> Parser<'file> {
             "Expected `fn` keyword to begin function declaration.",
         )?;
 
-        let ident_tok = self.skip_expect_token(
+        let ident_tok = self.expect_token(
             TokenInfoTag::Ident,
             "Expected an identifier after `fn` keyword.",
         )?;
@@ -349,6 +349,11 @@ impl<'file> Parser<'file> {
             node = self.parse_binary(AstBinaryKind::Assign, token, prec, Box::new(node))?;
         }
 
+        self.expect_token(
+            TokenInfoTag::Newline,
+            "Statements must be placed on their own line.",
+        )?;
+
         Ok(node)
     }
 
@@ -361,11 +366,6 @@ impl<'file> Parser<'file> {
             }
             _ => self.parse_expression()?,
         };
-
-        self.expect_token(
-            TokenInfoTag::Newline,
-            "Statements must be placed on their own line.",
-        )?;
 
         Ok(node)
     }
@@ -412,6 +412,7 @@ impl<'file> Parser<'file> {
             TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
             TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
             TokenInfo::XXXPrint => self.parse_unary(AstUnaryKind::XXXPrint, token),
+            TokenInfo::Fn => self.parse_fn_type_signature(token),
             _ => Err(lformat!(
                 "Encountered a non-prefix token `{:?}` in prefix position.",
                 token.info
@@ -527,5 +528,28 @@ impl<'file> Parser<'file> {
         }
 
         Ok(Ast::new_block(kind, token, exprs))
+    }
+
+    fn parse_fn_type_signature(&mut self, token: Token) -> ParseResult {
+        self.expect_token(TokenInfoTag::ParenOpen, "Expected `(` after `fn` keyword.")?;
+
+        let params = self.parse_comma_separated_expressions(
+            AstBlockKind::Params,
+            TokenInfoTag::ParenClose,
+            None,
+        )?;
+        self.expect_token(
+            TokenInfoTag::ParenClose,
+            "Expected `)` to terminate parameter list in function signature.",
+        )?;
+
+        let returns = if self.match_token(TokenInfoTag::Colon)? {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        let sig = AstInfoTypeSignature::Function(params, returns);
+        Ok(Ast::new_type_signature(token, sig))
     }
 }

@@ -22,6 +22,7 @@ pub enum AstInfo {
     Fn(Box<AstInfoFn>),
     Var(Box<AstInfoVar>),
     Import(Box<AstInfoImport>),
+    TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
 }
 
@@ -86,6 +87,11 @@ pub struct AstInfoImport {
     pub exposing: Option<Ast>,
 }
 
+#[derive(Debug)]
+pub enum AstInfoTypeSignature {
+    Function(Ast, Option<Ast>),
+}
+
 impl Ast {
     pub fn new(token: Token, info: AstInfo) -> Self {
         Self {
@@ -129,6 +135,15 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Block(kind, nodes),
+        }
+    }
+
+    pub fn new_type_signature(token: Token, sig: AstInfoTypeSignature) -> Self {
+        Self {
+            token,
+            scope: ScopeIndex(0),
+            typ: None,
+            info: AstInfo::TypeSignature(Box::new(sig)),
         }
     }
 }

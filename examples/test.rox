@@ -6,33 +6,45 @@
 let y = x + 1
 let x = 1
 let p: &Int = &y
-let r = p()
 
-# fn main() {
-#   XXXprint 1.5
-#   let x = 1
-# #  let y, z = 5
-# #  mut u, v = 1, 4
-#   foo()
-# }
-# 
-# fn foo() {
-#   XXXprint "This is a dependency"
-#   main()
-# }
-# 
-# fn add(a: Int, b: Int): Int {
-#   a + b
-# }
-# 
-# fn swap(a: &Int, b: &Int) {
-#   let t = *a
-#   *a = *b
-#   *b = t
-# }
+fn main() {
+  XXXprint 1.5
+  let x = 1
+#  let y, z = 5
+#  mut u, v = 1, 4
+#  foo()
+  let sum = add(4, 9)
+  XXXprint negative
+}
+
+fn foo() {
+  XXXprint "This is a dependency"
+  main()
+}
+
+fn add(a: Int, b: Int): Int {
+  a + b
+}
+
+fn swap(a: &Int, b: &Int) {
+  let t = *a
+  *a = *b
+  *b = t
+}
+
+fn map(n: Int, f: fn(Int): Int): Int {
+  f(n)
+}
+
+let negative = map(1, negate)
+
+fn negate(n: Int): Int {
+  -n
+}
 
 # These are examples of circular dependencies
 # that should not compile.
+# let r = p()
 # let x = y + 1
 # let y = x - 1
 # let z = z + 1

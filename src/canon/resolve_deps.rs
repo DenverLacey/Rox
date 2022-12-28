@@ -5,7 +5,8 @@ use debug_print::debug_println as dprintln;
 use crate::{
     interp::ParsedFile,
     ir::ast::{
-        Ast, AstBlockKind, AstInfo, Dependency, Queued, QueuedProgress, VariableInitializer,
+        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued, QueuedProgress,
+        VariableInitializer,
     },
     parsing::tokenization::TokenInfo,
     util::lformat,
@@ -113,6 +114,7 @@ impl<'files> Resolver<'files> {
                     AstInfo::Block(_, _) => {}
                     AstInfo::Import(_) => {}
                     AstInfo::TypeValue(_) => unreachable!(),
+                    AstInfo::TypeSignature(_) => {}
                 }
             }
         }
@@ -178,6 +180,7 @@ impl<'files> Resolver<'files> {
             AstInfo::Block(_, _) => {}
             AstInfo::Import(_) => {}
             AstInfo::TypeValue(_) => unreachable!(),
+            AstInfo::TypeSignature(_) => {}
         }
 
         node.progress = QueuedProgress::DependenciesFound;
@@ -231,6 +234,18 @@ impl<'files> Resolver<'files> {
             },
             AstInfo::Import(info) => todo!(),
             AstInfo::TypeValue(_) => unreachable!(),
+            AstInfo::TypeSignature(sig) => match sig.as_ref() {
+                AstInfoTypeSignature::Function(params, returns) => {
+                    let AstInfo::Block(AstBlockKind::Params, params) = &params.info else {
+                        panic!("[INTERNAL ERR] `params` node in `TypeSignature` is not a `Params` node.");
+                    };
+                    Self::resolve_dependencies_for_nodes(current_scope, deps, params);
+
+                    if let Some(returns) = returns {
+                        Self::resolve_dependencies_for_node(current_scope, deps, returns);
+                    }
+                }
+            },
         }
     }
 
