@@ -13,8 +13,8 @@ fn main() -> Result<(), &'static str> {
     let project_path = args.next().ok_or("Please provide a path to a project.")?;
 
     let interpreter = Interpreter::get_mut();
-    interpreter.generate_program(project_path)?;
-    interpreter.execute_program()?;
+    let exe = interpreter.generate_executable(project_path)?;
+    interpreter.execute_executable(&exe)?;
 
     Ok(())
 }

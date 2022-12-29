@@ -10,7 +10,7 @@ use crate::{
         resolve_deps::Resolver,
         scoping::{FuncID, Scope, Scoper},
     },
-    codegen::compile::compile_program,
+    codegen::{compile::compile_executable, exe::Executable},
     ir::ast::Queued,
     parsing::parsing::parse_file,
     typing::{
@@ -74,8 +74,11 @@ impl Interpreter {
         unsafe { &mut INTERP }
     }
 
-    pub fn generate_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
-        self.parse_program(path)?;
+    pub fn generate_executable(
+        &mut self,
+        path: impl AsRef<Path>,
+    ) -> Result<Executable, &'static str> {
+        self.parse_source_code(path)?;
 
         self.establish_scopes()?;
 
@@ -98,12 +101,12 @@ impl Interpreter {
             self.parsed_files.first().unwrap().ast
         );
 
-        compile_program(&self.parsed_files)?;
+        let exe = compile_executable(&self.parsed_files)?;
 
-        Ok(())
+        Ok(exe)
     }
 
-    pub fn execute_program(&mut self) -> Result<(), &'static str> {
+    pub fn execute_executable(&mut self, exe: &Executable) -> Result<(), &'static str> {
         todo!()
     }
 }
@@ -184,7 +187,7 @@ impl Interpreter {
 }
 
 impl Interpreter {
-    fn parse_program(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
+    fn parse_source_code(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
         let path = path.as_ref();
 
         if !path.exists() {

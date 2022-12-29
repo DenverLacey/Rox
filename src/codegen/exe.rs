@@ -111,11 +111,14 @@ impl ExecutableBuilder {
             let len = Self::extract_usize(len_bytes);
             i += len_bytes.len();
 
-            let bytes = self.slice_constants.get(i..(i + len)).expect("[INTERNAL ERR] Bad length.");
+            let bytes = self
+                .slice_constants
+                .get(i..(i + len))
+                .expect("[INTERNAL ERR] Bad length.");
             if slice.iter().eq(bytes.iter()) {
                 return Some(idx);
             }
-            
+
             i += len;
         }
 
