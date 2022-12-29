@@ -10,6 +10,7 @@ use crate::{
         resolve_deps::Resolver,
         scoping::{FuncID, Scope, Scoper},
     },
+    codegen::compile::compile_program,
     ir::ast::Queued,
     parsing::parsing::parse_file,
     typing::{
@@ -17,7 +18,7 @@ use crate::{
         value_type::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
         },
-    }, codegen::compile::compile_program,
+    },
 };
 
 static mut INTERP: Interpreter = Interpreter::new();

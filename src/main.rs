@@ -1,5 +1,5 @@
-mod codegen;
 mod canon;
+mod codegen;
 mod interp;
 mod ir;
 mod parsing;
