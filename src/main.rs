@@ -1,3 +1,4 @@
+mod codegen;
 mod canon;
 mod interp;
 mod ir;

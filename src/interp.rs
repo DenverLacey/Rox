@@ -8,16 +8,16 @@ use debug_print::debug_println as dprintln;
 use crate::{
     canon::{
         resolve_deps::Resolver,
-        scoping::{FuncID, Scope, ScopeIndex, Scoper},
+        scoping::{FuncID, Scope, Scoper},
     },
     ir::ast::Queued,
     parsing::parsing::parse_file,
     typing::{
-        typecheck::typecheck_files,
+        typecheck::typecheck_program,
         value_type::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
         },
-    },
+    }, codegen::compile::compile_program,
 };
 
 static mut INTERP: Interpreter = Interpreter::new();
@@ -91,11 +91,13 @@ impl Interpreter {
 
         self.resolve_dependencies()?;
 
-        typecheck_files(&mut self.parsed_files)?;
+        typecheck_program(&mut self.parsed_files)?;
         dprintln!(
             "typechecked ast:\n{:?}\n",
             self.parsed_files.first().unwrap().ast
         );
+
+        compile_program(&self.parsed_files)?;
 
         Ok(())
     }

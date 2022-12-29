@@ -3,7 +3,7 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Dependency, Queued, QueuedProgress, VariableInitializer,
+        AstUnaryKind, Queued, QueuedProgress, VariableInitializer,
     },
     parsing::tokenization::{Token, TokenInfo},
     util::lformat,
@@ -11,7 +11,7 @@ use crate::{
 
 use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer};
 
-pub fn typecheck_files(files: &mut [ParsedFile]) -> Result<(), &'static str> {
+pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<(), &'static str> {
     let mut queued_remaining: usize = files.iter().map(|file| file.ast.len()).sum();
     while queued_remaining != 0 {
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
