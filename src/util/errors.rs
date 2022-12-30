@@ -1,4 +1,4 @@
-use std::fmt::{Display, Debug};
+use std::fmt::Debug;
 
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;

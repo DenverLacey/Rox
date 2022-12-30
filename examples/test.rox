@@ -7,6 +7,7 @@ let y = x + 1
 let x = 1
 let p: &Int = &y
 
+%[entry]
 fn main() {
   XXXprint 1.5
   let x = 1

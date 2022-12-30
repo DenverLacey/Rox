@@ -6,9 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bitflags = "1.3.2"
 debug_print = "1.0.0"
 enum-tags = "0.1.0"
 enum-tags-macros = "0.1.0"
 enum-tags-traits = "0.1.0"
 miette = { version = "5.5.0", features = ["fancy"] }
+phf = { version = "0.11.1", features = ["macros"] }
 thiserror = "1.0.38"

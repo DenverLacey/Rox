@@ -5,6 +5,8 @@ use crate::{
     typing::value_type::Type,
 };
 
+use super::annotations::Annotations;
+
 #[derive(Debug)]
 pub struct Ast {
     pub token: Token,
@@ -60,6 +62,7 @@ pub enum AstBlockKind {
 
 #[derive(Debug)]
 pub struct AstInfoFn {
+    pub annons: Annotations,
     pub ident: Ast,
     pub params: Ast,
     pub returns: Option<Ast>,

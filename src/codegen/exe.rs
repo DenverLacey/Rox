@@ -1,4 +1,4 @@
-use crate::interp::FunctionInfo;
+use crate::{interp::FunctionInfo, util::errors::{error, Result}};
 
 pub struct Executable {
     pub constants: Box<[u8]>,
@@ -11,6 +11,7 @@ pub struct ExecutableBuilder {
     constants: Vec<u8>,
     slice_constants: Vec<u8>,
     funcs: Vec<FunctionInfo>,
+    entry_point: Option<usize>,
 }
 
 impl ExecutableBuilder {
@@ -19,6 +20,7 @@ impl ExecutableBuilder {
             constants: Vec::new(),
             slice_constants: Vec::new(),
             funcs: Vec::new(),
+            entry_point: None,
         }
     }
 
@@ -87,17 +89,26 @@ impl ExecutableBuilder {
         self.funcs.push(f);
     }
 
-    pub fn build(self) -> Executable {
+    pub fn set_entry_point(&mut self, entry_point: usize) -> bool {
+        if self.entry_point.is_some() {
+            return false;
+        }
+
+        self.entry_point = Some(entry_point);
+        true
+    }
+
+    pub fn build(self) -> Result<Executable> {
         let constants = self.constants.into_boxed_slice();
         let str_constants = self.slice_constants.into_boxed_slice();
         let funcs = self.funcs.into_boxed_slice();
 
-        Executable {
+        Ok(Executable {
             constants,
             str_constants,
             funcs,
-            entry_point: 0, // @TODO: Actually find `main`
-        }
+            entry_point: self.entry_point.ok_or_else(|| error!("No entry point function designated."))?,
+        })
     }
 }
 

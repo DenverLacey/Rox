@@ -2,9 +2,12 @@ use enum_tags::TaggedEnum;
 
 use crate::{
     interp::{LoadedFile, ParsedFile},
-    ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoTypeSignature,
-        AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
+    ir::{
+        ast::{
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoTypeSignature,
+            AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
+        },
+        annotations::{Annotations, self},
     },
     parsing::tokenization::*,
     util::errors::{error, Result, SourceError},
@@ -34,11 +37,12 @@ type ParseResult = Result<Ast>;
 
 struct Parser<'file> {
     tokenizer: Tokenizer<'file>,
+    current_annotations: Annotations,
 }
 
 impl<'file> Parser<'file> {
     fn new(tokenizer: Tokenizer<'file>) -> Self {
-        Self { tokenizer }
+        Self { tokenizer, current_annotations: Default::default() }
     }
 }
 
@@ -114,6 +118,19 @@ impl<'file> Parser<'file> {
             Ok(false)
         }
     }
+
+    fn clear_annontations_for_valid(&mut self, valid: Annotations) -> Result<Annotations> {
+        let others = self.current_annotations & !valid; 
+        if others != Annotations::default() {
+            // @TODO: Imrpove error message
+            return Err(error!("Invalid annotations: valid = `{:?}` but given = `{:?}`", valid, self.current_annotations));
+        }
+
+        let annons = self.current_annotations;
+        self.current_annotations = Annotations::default();
+
+        Ok(annons)
+    }
 }
 
 impl<'file> Parser<'file> {
@@ -123,11 +140,17 @@ impl<'file> Parser<'file> {
             TokenInfo::Fn => self.parse_fn_decl(),
             TokenInfo::Let | TokenInfo::Mut => self.parse_var_decl(),
             TokenInfo::Import => self.parse_import_decl(),
+            TokenInfo::Percent => {
+                self.parse_annotations()?;
+                self.parse_declaration()
+            }
             _ => self.parse_statement_or_assignment(),
         }
     }
 
     fn parse_fn_decl(&mut self) -> ParseResult {
+        let fn_annons = self.clear_annontations_for_valid(annotations::FN_ANNOTATIONS)?;
+
         let fn_tok = self.expect_token(
             TokenInfoTag::Fn,
             "Expected `fn` keyword to begin function declaration.",
@@ -152,6 +175,7 @@ impl<'file> Parser<'file> {
         Ok(Ast::new(
             fn_tok,
             AstInfo::Fn(Box::new(AstInfoFn {
+                annons: fn_annons,
                 ident,
                 params,
                 returns,
@@ -523,6 +547,31 @@ impl<'file> Parser<'file> {
         }
 
         Ok(Ast::new_block(kind, token, exprs))
+    }
+
+    fn parse_annotations(&mut self) -> Result<()> {
+        self.skip_expect_token(TokenInfoTag::SqrBracketOpen, "Expected `[` after `%` in annotation list.")?;
+
+        while !self.skip_check_token(TokenInfoTag::SqrBracketClose)? && !self.check_token(TokenInfoTag::End)? {
+            let tok = self.expect_token(TokenInfoTag::Ident, "Expected an annotation in annotation list.")?;
+            let TokenInfo::Ident(annon) = tok.info else {
+                unreachable!();
+            };
+
+            let Some(annon) = annotations::TABLE.get(annon.as_str()).copied() else {
+                return Err(SourceError::new("Invalid annotation", tok.loc, format!("`{}` is not an annotation.", annon)).into());
+            };
+
+            self.current_annotations |= annon;
+
+            if !self.skip_match_token(TokenInfoTag::Comma)? {
+                break;
+            }
+        }
+
+        self.expect_token(TokenInfoTag::SqrBracketClose, "Expected `]` to terminate annotation list.")?;
+
+        Ok(())
     }
 
     fn parse_fn_type_signature(&mut self, token: Token) -> ParseResult {
