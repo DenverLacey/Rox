@@ -4,6 +4,7 @@ pub struct Executable {
     pub constants: Box<[u8]>,
     pub str_constants: Box<[u8]>,
     pub funcs: Box<[FunctionInfo]>,
+    pub entry_point: usize,
 }
 
 pub struct ExecutableBuilder {
@@ -95,6 +96,7 @@ impl ExecutableBuilder {
             constants,
             str_constants,
             funcs,
+            entry_point: 0, // @TODO: Actually find `main`
         }
     }
 }

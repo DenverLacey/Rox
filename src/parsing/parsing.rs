@@ -7,10 +7,10 @@ use crate::{
         AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
     },
     parsing::tokenization::*,
-    util::lformat,
+    util::errors::{error, Result, SourceError},
 };
 
-pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
+pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile> {
     let mut nodes = vec![];
     let mut parser = Parser::new(Tokenizer::new(file));
 
@@ -24,12 +24,13 @@ pub fn parse_file(file: &LoadedFile) -> Result<ParsedFile, &'static str> {
     }
 
     Ok(ParsedFile {
+        index: file.index,
         filepath: file.filepath.clone(),
         ast: nodes,
     })
 }
 
-type ParseResult = Result<Ast, &'static str>;
+type ParseResult = Result<Ast>;
 
 struct Parser<'file> {
     tokenizer: Tokenizer<'file>,
@@ -42,36 +43,36 @@ impl<'file> Parser<'file> {
 }
 
 impl<'file> Parser<'file> {
-    fn peek_token(&mut self, n: usize) -> Result<&Token, &'static str> {
+    fn peek_token(&mut self, n: usize) -> Result<&Token> {
         self.tokenizer.peek(n)
     }
 
-    fn next_token(&mut self) -> Result<Token, &'static str> {
+    fn next_token(&mut self) -> Result<Token> {
         self.tokenizer.next()
     }
 
-    fn next_token_if_eq(&mut self, kind: TokenInfoTag) -> Result<Option<Token>, &'static str> {
+    fn next_token_if_eq(&mut self, kind: TokenInfoTag) -> Result<Option<Token>> {
         if self.check_token(kind)? {
             return Ok(Some(self.next_token().expect("Already peeked")));
         }
         Ok(None)
     }
 
-    fn skip_newline(&mut self) -> Result<(), &'static str> {
+    fn skip_newline(&mut self) -> Result<()> {
         self.match_token(TokenInfoTag::Newline)?;
         Ok(())
     }
 
-    fn check_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+    fn check_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
         self.peek_token(0).map(|tok| tok.info.tag() == kind)
     }
 
-    fn skip_check_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+    fn skip_check_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
         self.skip_newline()?;
         self.check_token(kind)
     }
 
-    fn match_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+    fn match_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
         if self.check_token(kind)? {
             self.next_token().expect("Already peeked.");
             return Ok(true);
@@ -80,33 +81,26 @@ impl<'file> Parser<'file> {
         Ok(false)
     }
 
-    fn skip_match_token(&mut self, kind: TokenInfoTag) -> Result<bool, &'static str> {
+    fn skip_match_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
         self.skip_newline()?;
         self.match_token(kind)
     }
 
-    fn expect_token(
-        &mut self,
-        kind: TokenInfoTag,
-        err: &'static str,
-    ) -> Result<Token, &'static str> {
+    fn expect_token(&mut self, kind: TokenInfoTag, err: impl Into<String>) -> Result<Token> {
         if self.check_token(kind)? {
             return Ok(self.next_token().expect("Already peeked."));
         }
 
-        Err(err)
+        let token = self.peek_token(0).unwrap();
+        Err(SourceError::new(format!("Unexpected `{}`.", token.info), token.loc,  err).into())
     }
 
-    fn skip_expect_token(
-        &mut self,
-        kind: TokenInfoTag,
-        err: &'static str,
-    ) -> Result<Token, &'static str> {
+    fn skip_expect_token(&mut self, kind: TokenInfoTag, err: &'static str) -> Result<Token> {
         self.skip_newline()?;
         self.expect_token(kind, err)
     }
 
-    fn match_ident(&mut self, ident: impl AsRef<str>) -> Result<bool, &'static str> {
+    fn match_ident(&mut self, ident: impl AsRef<str>) -> Result<bool> {
         if self.check_token(TokenInfoTag::Ident)? {
             let ident_tok = self.peek_token(0).expect("Already peeked");
             match &ident_tok.info {
@@ -266,15 +260,16 @@ impl<'file> Parser<'file> {
             None
         };
 
-        let initializer =
-            match (type_constraint, init_expr) {
-                (Some(tc), Some(ie)) => VariableInitializer::TypeAndExpr(tc, ie),
-                (None, Some(ie)) => VariableInitializer::Expr(ie),
-                (Some(tc), None) => VariableInitializer::Type(tc),
-                _ => return Err(
-                    "Variable declarations must declare a variables type, inital value or both.",
-                ),
-            };
+        let initializer = match (type_constraint, init_expr) {
+            (Some(tc), Some(ie)) => VariableInitializer::TypeAndExpr(tc, ie),
+            (None, Some(ie)) => VariableInitializer::Expr(ie),
+            (Some(tc), None) => VariableInitializer::Type(tc),
+            _ => {
+                return Err(error!(
+                    "Variable declarations must declare a variables type, inital value or both."
+                ))
+            }
+        };
 
         let mutable = matches!(var_tok.info, TokenInfo::Mut);
         Ok(Ast::new(
@@ -377,14 +372,14 @@ impl<'file> Parser<'file> {
     fn parse_precedence(&mut self, prec: TokenPrecedence) -> ParseResult {
         let token = self.next_token()?;
         if token.is_end() {
-            return Err("Expected an expression.");
+            return Err(error!("Expected an expression."));
         }
 
         let mut previous = self.parse_prefix(token)?;
         while prec <= self.peek_token(0)?.info.precedence() {
             let token = self.next_token()?;
             if token.is_end() {
-                return Err("Incomplete expression.");
+                return Err(error!("Incomplete expression."));
             }
 
             previous = self.parse_infix(token, previous)?;
@@ -413,7 +408,7 @@ impl<'file> Parser<'file> {
             TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
             TokenInfo::XXXPrint => self.parse_unary(AstUnaryKind::XXXPrint, token),
             TokenInfo::Fn => self.parse_fn_type_signature(token),
-            _ => Err(lformat!(
+            _ => Err(error!(
                 "Encountered a non-prefix token `{:?}` in prefix position.",
                 token.info
             )),
@@ -465,7 +460,7 @@ impl<'file> Parser<'file> {
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
             }
-            _ => Err(lformat!(
+            _ => Err(error!(
                 "Encountered a non-infix token `{:?}` in infix position.",
                 token.info
             )),

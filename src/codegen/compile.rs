@@ -1,8 +1,12 @@
-use crate::{interp::ParsedFile, ir::ast::{Ast, AstInfo}};
+use crate::{
+    interp::ParsedFile,
+    ir::ast::{Ast, AstInfo},
+    util::errors::Result,
+};
 
 use super::exe::{Executable, ExecutableBuilder};
 
-pub fn compile_executable(files: &[ParsedFile]) -> Result<Executable, &'static str> {
+pub fn compile_executable(files: &[ParsedFile]) -> Result<Executable> {
     let mut compiler = Compiler::new();
 
     for node in files
@@ -37,7 +41,7 @@ impl Compiler {
 }
 
 impl Compiler {
-    fn compile_node(&mut self, node: &Ast) -> Result<(), &'static str> {
+    fn compile_node(&mut self, node: &Ast) -> Result<()> {
         todo!()
     }
 }

@@ -6,12 +6,12 @@ use crate::{
         AstUnaryKind, Queued, QueuedProgress, VariableInitializer,
     },
     parsing::tokenization::{Token, TokenInfo},
-    util::lformat,
+    util::errors::{Result, SourceError, SourceError2},
 };
 
 use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer};
 
-pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<(), &'static str> {
+pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
     let mut queued_remaining: usize = files.iter().map(|file| file.ast.len()).sum();
     while queued_remaining != 0 {
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
@@ -50,7 +50,7 @@ pub fn queued_ready_for_typecheck(queued: &Queued) -> bool {
     true
 }
 
-fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {
+fn typecheck_queued(queued: &mut Queued) -> Result<()> {
     let interp = Interpreter::get_mut();
 
     match &mut queued.node.info {
@@ -87,11 +87,7 @@ fn typecheck_queued(queued: &mut Queued) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn typecheck_var_decl(
-    scope: &mut Scope,
-    token: &Token,
-    info: &mut AstInfoVar,
-) -> Result<(), &'static str> {
+fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -> Result<()> {
     let interp = Interpreter::get_mut();
 
     assert!(
@@ -108,7 +104,7 @@ fn typecheck_var_decl(
         VariableInitializer::TypeAndExpr(typ, expr) => {
             typecheck_node(interp, typ)?;
             if !matches!(typ.typ, Some(Type::Type)) {
-                return Err("Specified type in variable declaration was not a type.");
+                return Err(SourceError::new("Specified type in variable declaration was not a type.", typ.token.loc, "This was expected to be a type signature.").into());
             }
 
             typecheck_node(interp, expr)?;
@@ -122,7 +118,7 @@ fn typecheck_var_decl(
             };
 
             if expr_type != typ_value {
-                return Err(lformat!("Initializer expression of variable declaration is of type `{}` but the specified type is `{}`.", expr_type, typ_value));
+                return Err(SourceError2::new("Specified type and type of initializer don't match.", typ.token.loc, "Specified type is here.", expr.token.loc, format!("This expression has type `{}`.", expr_type)).into());
             }
 
             var_type = typ_value;
@@ -130,7 +126,7 @@ fn typecheck_var_decl(
         VariableInitializer::Type(typ) => {
             typecheck_node(interp, typ)?;
             if !matches!(typ.typ, Some(Type::Type)) {
-                return Err("Specified type in variable declaration was not a type.");
+                return Err(SourceError::new("Specified type in variable declaration was not a type.", typ.token.loc, "This is not a type.").into());
             }
 
             let AstInfo::TypeValue(typ_value) = typ.info else {
@@ -156,17 +152,14 @@ fn typecheck_var_decl(
     scope.add_binding(
         ident.clone(),
         binding,
-        lformat!("Redeclaration of `{}`", ident),
+        token.loc,
+        format!("Redeclaration of `{}`", ident), // @TODO: Improve error
     )?;
 
     Ok(())
 }
 
-fn typecheck_fn_signature(
-    scope: &mut Scope,
-    token: &Token,
-    info: &mut AstInfoFn,
-) -> Result<(), &'static str> {
+fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn) -> Result<()> {
     let interp = Interpreter::get_mut();
 
     let TokenInfo::Ident(ident) = &info.ident.token.info else {
@@ -191,7 +184,7 @@ fn typecheck_fn_signature(
 
         typecheck_node(interp, typ)?;
         if !matches!(typ.typ, Some(Type::Type)) {
-            return Err("Expression expected to be a type for a function parameter.");
+            return Err(SourceError::new("Non-type expression in function parameter type annotation.", typ.token.loc, "This should be a type.").into());
         }
 
         let AstInfo::TypeValue(param_type) = typ.info else {
@@ -208,7 +201,8 @@ fn typecheck_fn_signature(
         param_scope.add_binding(
             param_name.clone(),
             param_binding,
-            lformat!(
+            param.token.loc,
+            format!(
                 "There is already a parameter with the name `{}`.",
                 param_name
             ),
@@ -221,7 +215,7 @@ fn typecheck_fn_signature(
         typecheck_node(interp, returns)?;
 
         if !matches!(returns.typ, Some(Type::Type)) {
-            return Err("Expression expected to be a type for a function return type.");
+            return Err(SourceError::new("Expression expected to be a type for a function return type.", returns.token.loc, "This should be a type.").into());
         }
 
         let AstInfo::TypeValue(returns) = returns.info else {
@@ -246,22 +240,19 @@ fn typecheck_fn_signature(
     scope.add_binding(
         ident.clone(),
         binding,
-        lformat!("Redeclaration of `{}`.", ident),
+        token.loc,
+        format!("Redeclaration of `{}`.", ident),
     )?;
 
     Ok(())
 }
 
-fn typecheck_fn_body(
-    scope: &mut Scope,
-    token: &Token,
-    info: &mut AstInfoFn,
-) -> Result<(), &'static str> {
+fn typecheck_fn_body(scope: &mut Scope, token: &Token, info: &mut AstInfoFn) -> Result<()> {
     let interp = Interpreter::get_mut();
     typecheck_node(interp, &mut info.body)
 }
 
-fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<(), &'static str> {
+fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
     match &mut node.info {
         AstInfo::Literal => {
             let scope = &mut interp.scopes[node.scope.0];
@@ -297,18 +288,15 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<(), &'stat
 
                 let param_types = params.iter().enumerate().map(|(i, param)| {
                     let AstInfo::TypeValue(param_type) = &param.info else {
-                        return Err(lformat!("Parameter {} in type signature is not a type.", i + 1));
+                        return Err(SourceError::new("Parameter in function type signature not a type.", param.token.loc, "This should be a type.").into());
                     };
                     Ok(*param_type)
-                }).collect::<Result<Vec<_>, _>>()?.into_boxed_slice();
+                }).collect::<Result<Vec<_>>>()?.into_boxed_slice();
 
                 let return_type = if let Some(returns) = returns {
                     typecheck_node(interp, returns)?;
                     let AstInfo::TypeValue(return_type) = &returns.info else {
-                        return Err(lformat!(
-                            "Return type expression of function type signature was not a type but a `{}` value.",
-                            returns.typ.expect("[INTERNAL ERR] `returns` node doesn't have a type."
-                        )));
+                        return Err(SourceError::new("Return type expression of function type signature not a type.", returns.token.loc, "This should be a type.").into());
                     };
 
                     Some(*return_type)
@@ -331,13 +319,13 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<(), &'stat
     Ok(())
 }
 
-type TypecheckResult = Result<Option<Type>, &'static str>;
+type TypecheckResult = Result<Option<Type>>;
 
 fn typecheck_literal(scope: &mut Scope, token: &Token) -> TypecheckResult {
     let typ = match &token.info {
         TokenInfo::Ident(ident) => {
             let Some(binding) = scope.find_binding(ident) else {
-                return Err(lformat!("Undeclared identifier `{}`.", ident));
+                return Err(SourceError::new("Undeclared identifier.", token.loc, format!("No variable `{}` declared.", ident)).into());
             };
 
             match binding {
@@ -389,17 +377,12 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
             typecheck_node(interp, expr)?;
 
             if expr.typ.is_none() {
-                return Err(
-                    "Expected either an `Int` or `Float` value for `-` but found no value.",
-                );
+                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
             }
 
             let expr_type = expr.typ.unwrap();
             if expr_type != Type::Int && expr_type != Type::Float {
-                return Err(lformat!(
-                    "Expected either an `Int` or `Float` value for `-` but found a `{}` value.",
-                    expr_type
-                ));
+                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, expr_type)).into());
             }
 
             Some(expr_type)
@@ -408,15 +391,12 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
             typecheck_node(interp, expr)?;
 
             if expr.typ.is_none() {
-                return Err("Expected a `Bool` value for `!` but found no value.");
+                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` but found no type.", Type::Bool)).into());
             }
 
             let expr_type = expr.typ.unwrap();
             if expr_type != Type::Bool {
-                return Err(lformat!(
-                    "Expected a `Bool` value for `!` but found a `{}` value.",
-                    expr_type
-                ));
+                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` but found `{}`.", Type::Bool, expr_type)).into());
             }
 
             Some(expr_type)
@@ -426,7 +406,7 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
         AstUnaryKind::Deref => {
             typecheck_node(interp, expr)?;
             if expr.typ.is_none() {
-                return Err("Expected a pointer value for `*` but found no value.");
+                return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, "Type should be a pointer type but found no type.").into());
             }
 
             let expr_type = expr.typ.unwrap();
@@ -436,16 +416,10 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
                 if let TypeInfo::Pointer(type_info) = typ {
                     deref_type = type_info.pointee_type;
                 } else {
-                    return Err(lformat!(
-                        "Expected a pointer value for `*` but found a `{}` value.",
-                        expr_type
-                    ));
+                    return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, format!("Type should be a pointer type but found `{}`.", expr_type)).into());
                 }
             } else {
-                return Err(lformat!(
-                    "Expected a pointer value for `*` but found a `{}` value.",
-                    expr_type
-                ));
+                return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, format!("Type should be a pointer type but found `{}`.", expr_type)).into());
             }
 
             Some(deref_type)
@@ -510,128 +484,28 @@ fn typecheck_binary(
     let interp = Interpreter::get_mut();
 
     let typ = match kind {
-        AstBinaryKind::Add => {
+        AstBinaryKind::Add | AstBinaryKind::Sub | AstBinaryKind::Mul | AstBinaryKind::Div | AstBinaryKind::Mod => {
             typecheck_node(interp, lhs)?;
             typecheck_node(interp, rhs)?;
 
             let Some(lhs_type) = lhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `+` but found no value.");
+                return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
             };
 
             let Some(rhs_type) = rhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `+` but found no value.");
+                return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
             };
 
             if lhs_type != Type::Int && lhs_type != Type::Float {
-                return Err(lformat!("Left hand side expression of `+` operator expected to be either an `Int` or `Float` value but found a `{}` value.", lhs_type));
+                return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, lhs_type)).into());
             }
 
             if rhs_type != Type::Int && rhs_type != Type::Float {
-                return Err(lformat!("Right hand side expression of `+` operator expected to be either an `Int` or `Float` value but found a `{}` value.", rhs_type));
+                return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, rhs_type)).into());
             }
 
             if lhs_type != rhs_type {
-                return Err(lformat!("Both expressions of `+` operator must be the same type but found `{}` and `{}` values.", lhs_type, rhs_type));
-            }
-
-            Some(lhs_type)
-        }
-        AstBinaryKind::Sub => {
-            typecheck_node(interp, lhs)?;
-            typecheck_node(interp, rhs)?;
-
-            let Some(lhs_type) = lhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `-` but found no value.");
-            };
-
-            let Some(rhs_type) = rhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `-` but found no value.");
-            };
-
-            if lhs_type != Type::Int && lhs_type != Type::Float {
-                return Err(lformat!("Left hand side expression of `-` operator expected to be either an `Int` or `Float` value but found a `{}` value.", lhs_type));
-            }
-
-            if rhs_type != Type::Int && rhs_type != Type::Float {
-                return Err(lformat!("Right hand side expression of `-` operator expected to be either an `Int` or `Float` value but found a `{}` value.", rhs_type));
-            }
-
-            if lhs_type != rhs_type {
-                return Err(lformat!("Both expressions of `-` operator must be the same type but found `{}` and `{}` values.", lhs_type, rhs_type));
-            }
-
-            Some(lhs_type)
-        }
-        AstBinaryKind::Mul => {
-            typecheck_node(interp, lhs)?;
-            typecheck_node(interp, rhs)?;
-
-            let Some(lhs_type) = lhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `*` but found no value.");
-            };
-
-            let Some(rhs_type) = rhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `*` but found no value.");
-            };
-
-            if lhs_type != Type::Int && lhs_type != Type::Float {
-                return Err(lformat!("Left hand side expression of `*` operator expected to be either an `Int` or `Float` value but found a `{}` value.", lhs_type));
-            }
-
-            if rhs_type != Type::Int && rhs_type != Type::Float {
-                return Err(lformat!("Right hand side expression of `*` operator expected to be either an `Int` or `Float` value but found a `{}` value.", rhs_type));
-            }
-
-            if lhs_type != rhs_type {
-                return Err(lformat!("Both expressions of `*` operator must be the same type but found `{}` and `{}` values.", lhs_type, rhs_type));
-            }
-
-            Some(lhs_type)
-        }
-        AstBinaryKind::Div => {
-            typecheck_node(interp, lhs)?;
-            typecheck_node(interp, rhs)?;
-
-            let Some(lhs_type) = lhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `/` but found no value.");
-            };
-
-            let Some(rhs_type) = rhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `/` but found no value.");
-            };
-
-            if lhs_type != Type::Int && lhs_type != Type::Float {
-                return Err(lformat!("Left hand side expression of `/` operator expected to be either an `Int` or `Float` value but found a `{}` value.", lhs_type));
-            }
-
-            if rhs_type != Type::Int && rhs_type != Type::Float {
-                return Err(lformat!("Right hand side expression of `/` operator expected to be either an `Int` or `Float` value but found a `{}` value.", rhs_type));
-            }
-
-            if lhs_type != rhs_type {
-                return Err(lformat!("Both expressions of `/` operator must be the same type but found `{}` and `{}` values.", lhs_type, rhs_type));
-            }
-
-            Some(lhs_type)
-        }
-        AstBinaryKind::Mod => {
-            typecheck_node(interp, lhs)?;
-            typecheck_node(interp, rhs)?;
-
-            let Some(lhs_type) = lhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `%` but found no value.");
-            };
-
-            let Some(rhs_type) = rhs.typ else {
-                return Err("Expected either an `Int` or `Float` value for `%` but found no value.");
-            };
-
-            if lhs_type != Type::Int {
-                return Err(lformat!("Left hand side expression of `%` operator expected to be an `Int` but found a `{}` value.", lhs_type));
-            }
-
-            if rhs_type != Type::Int {
-                return Err(lformat!("Right hand side expression of `%` operator expected to be an `Int` but found a `{}` value.", rhs_type));
+                return Err(SourceError2::new("Type Mistmatch.", lhs.token.loc, format!("`{}`.", lhs_type), rhs.token.loc, format!("`{}`", rhs_type)).into());
             }
 
             Some(lhs_type)
@@ -641,22 +515,18 @@ fn typecheck_binary(
             typecheck_node(interp, rhs)?;
 
             let Some(lhs_type) = lhs.typ else {
-                return Err("Expected left hand side expression of assignment to have a value but found no value.");
+                return Err(SourceError::new("Bad assignment target.", lhs.token.loc, "This should have a type but it doesn't.").into());
             };
 
             let Some(rhs_type) = rhs.typ else {
-                return Err("Expected left hand side expression of assignment to have a value but found no value.");
+                return Err(SourceError::new("Type Mistmatch.", rhs.token.loc, "This should have a type but it doesn't.").into());
             };
 
             // @TODO:
             // Enforce immutability
             //
             if lhs_type != rhs_type {
-                return Err(lformat!(
-                    "Cannot assign a `{}` value to something of type `{}`.",
-                    rhs_type,
-                    lhs_type
-                ));
+                return Err(SourceError2::new("Type mismatch.", lhs.token.loc, format!("`{}`.", lhs_type), rhs.token.loc, format!("`{}`", rhs_type)).into());
             }
 
             None
@@ -670,10 +540,10 @@ fn typecheck_binary(
                 if let TypeInfo::Function(fn_info) = type_info {
                     fn_info
                 } else {
-                    return Err(lformat!("Expected left hand side of function call to be a function value but found a `{}` value.", lhs.typ.unwrap()));
+                    return Err(SourceError::new("Cannot call something that isn't a function.", lhs.token.loc, format!("Should be a function type but is `{}`.", Type::Composite(lhs_type))).into());
                 }
             } else {
-                return Err("Expected left hand side of function call to be a function value but found no found.");
+                return Err(SourceError::new("Cannot call something that isn't a function.", lhs.token.loc, "Should be a function type but has no type.").into());
             };
 
             let AstInfo::Block(AstBlockKind::Args, args) = &rhs.info else {
@@ -681,17 +551,24 @@ fn typecheck_binary(
             };
 
             if fn_info.params.len() != args.len() {
-                return Err(lformat!("Incorrect number of arguments for function call. Expected {} arguments but was given {}.", fn_info.params.len(), args.len()));
+                if args.is_empty() {
+                    return Err(SourceError::new("Incorrect number of arguments.", rhs.token.loc, format!("Expected {} argument(s) but was given 0.", fn_info.params.len())).into());
+                } else {
+                    let first_bad = std::cmp::min(fn_info.params.len(), args.len());
+                    let arg = &args[first_bad];
+                    return Err(SourceError::new("Incorrect number of arguments.", arg.token.loc, format!("Expected {} argument(s) but was given {}.", fn_info.params.len(), args.len())).into());
+                }
             }
 
             for i in 0..args.len() {
-                let given = args[i]
+                let arg = &args[i];
+                let given = arg
                     .typ
                     .expect("[INTERNAL ERR] argument doesn't have a type.");
                 let expected = fn_info.params[i];
 
                 if given != expected {
-                    return Err(lformat!("Argument {} of function call expected to be a `{}` value but was a `{}` value.", i + 1, expected, given));
+                    return Err(SourceError::new("Type mismatch.", arg.token.loc, format!("Type should be `{}` but is `{}`.", expected, given)).into());
                 }
             }
 
@@ -713,7 +590,7 @@ fn typecheck_block(
     token: &Token,
     kind: AstBlockKind,
     nodes: &mut [Ast],
-) -> Result<(), &'static str> {
+) -> Result<()> {
     let interp = Interpreter::get_mut();
 
     for node in nodes {

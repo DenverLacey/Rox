@@ -7,14 +7,23 @@ mod typing;
 mod util;
 
 use crate::interp::Interpreter;
+use crate::util::errors::{error, Result};
 
-fn main() -> Result<(), &'static str> {
-    let mut args = std::env::args().skip(1);
-    let project_path = args.next().ok_or("Please provide a path to a project.")?;
+fn main() {
+    let result: Result<()> = (|| {
+        let mut args = std::env::args().skip(1);
+        let project_path = args
+            .next()
+            .ok_or(error!("Please provide a path to a project."))?;
 
-    let interpreter = Interpreter::get_mut();
-    let exe = interpreter.generate_executable(project_path)?;
-    interpreter.execute_executable(&exe)?;
+        let interpreter = Interpreter::get_mut();
+        let exe = interpreter.generate_executable(project_path)?;
+        interpreter.execute_executable(&exe)?;
 
-    Ok(())
+        Ok(())
+    })();
+
+    if let Err(err) = result {
+        eprintln!("{:?}", err);
+    }
 }

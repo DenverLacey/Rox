@@ -4,6 +4,7 @@ use crate::{
     interp::Interpreter,
     ir::ast::{Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, VariableInitializer},
     typing::value_type::Type,
+    util::errors::{Result, SourceError}, parsing::tokenization::CodeLocation,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -48,12 +49,13 @@ impl Scope {
         &mut self,
         ident: impl Into<String>,
         binding: ScopeBinding,
-        err: &'static str,
-    ) -> Result<(), &'static str> {
+        loc: CodeLocation,
+        err: impl Into<String>,
+    ) -> Result<()> {
         let ident = ident.into();
 
         if self.bindings.contains_key(&ident) {
-            return Err(err);
+            return Err(SourceError::new("Redclaration of identifier.", loc, err).into());
         }
 
         self.add_binding_unchecked(ident, binding);
@@ -123,7 +125,7 @@ impl<'a> Scoper<'a> {
     }
 }
 
-type ScoperResult = Result<(), &'static str>;
+type ScoperResult = Result<()>;
 
 impl<'a> Scoper<'a> {
     fn push_scope(&mut self, parent: ScopeIndex) -> ScopeIndex {
@@ -183,7 +185,7 @@ impl<'a> Scoper<'a> {
                             target.scope = current_scope;
                         }
                     }
-                    _ => return Err("[ERR] Targets node of Var Decl node is not a Literal ident or a VarDeclTargets node."),
+                    _ => panic!("[INTERNAL ERR] Targets node of Var Decl node is not a Literal ident or a VarDeclTargets node."),
                 }
 
                 match &mut info.initializer {

@@ -19,6 +19,7 @@ use crate::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
         },
     },
+    util::errors::{error, Result},
 };
 
 static mut INTERP: Interpreter = Interpreter::new();
@@ -37,12 +38,14 @@ pub struct Pid(pub usize);
 
 #[derive(Debug)]
 pub struct LoadedFile {
+    pub index: usize,
     pub filepath: PathBuf,
     pub source: String,
 }
 
 #[derive(Debug)]
 pub struct ParsedFile {
+    pub index: usize,
     pub filepath: PathBuf,
     pub ast: Vec<Queued>,
 }
@@ -74,10 +77,7 @@ impl Interpreter {
         unsafe { &mut INTERP }
     }
 
-    pub fn generate_executable(
-        &mut self,
-        path: impl AsRef<Path>,
-    ) -> Result<Executable, &'static str> {
+    pub fn generate_executable(&mut self, path: impl AsRef<Path>) -> Result<Executable> {
         self.parse_source_code(path)?;
 
         self.establish_scopes()?;
@@ -106,7 +106,7 @@ impl Interpreter {
         Ok(exe)
     }
 
-    pub fn execute_executable(&mut self, exe: &Executable) -> Result<(), &'static str> {
+    pub fn execute_executable(&mut self, exe: &Executable) -> Result<()> {
         todo!()
     }
 }
@@ -187,18 +187,18 @@ impl Interpreter {
 }
 
 impl Interpreter {
-    fn parse_source_code(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
+    fn parse_source_code(&mut self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
 
         if !path.exists() {
-            return Err("Given path does not exist.");
+            return Err(error!("Given path `{:?}` does not exist.", path));
         } else if path.is_dir() {
             dprintln!("[INFO] Directory given as project path.");
 
-            let dir = std::fs::read_dir(path).map_err(|_| "Failed to read directory.")?;
+            let dir = std::fs::read_dir(path).map_err(|_| error!("Failed to read directory."))?;
             for dir_entry in dir {
                 let path = dir_entry
-                    .map_err(|_| "Failed to walk project directory.")?
+                    .map_err(|_| error!("Failed to walk project directory."))?
                     .path();
 
                 if path.extension() != Some(OsStr::new("rox")) {
@@ -210,16 +210,16 @@ impl Interpreter {
         } else if path.is_file() {
             self.load_and_parse_file(path)?;
         } else {
-            return Err("Given path is neither a file or a directory.");
+            return Err(error!("Given path is neither a file or a directory."));
         }
 
         Ok(())
     }
 
-    fn load_and_parse_file(&mut self, path: impl AsRef<Path>) -> Result<(), &'static str> {
+    fn load_and_parse_file(&mut self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
 
-        let loaded_file = load_file(path)?;
+        let loaded_file = load_file(self.loaded_files.len(), path)?;
         dprintln!("[INFO] Loaded file {:?}", path);
 
         let parsed_file = parse_file(&loaded_file)?;
@@ -231,7 +231,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn establish_scopes(&mut self) -> Result<(), &'static str> {
+    fn establish_scopes(&mut self) -> Result<()> {
         let mut scoper = Scoper::new(&mut self.scopes);
         scoper.load_prelude();
 
@@ -243,21 +243,22 @@ impl Interpreter {
         Ok(())
     }
 
-    fn resolve_dependencies(&mut self) -> Result<(), &'static str> {
+    fn resolve_dependencies(&mut self) -> Result<()> {
         let mut resolver = Resolver::new(&mut self.parsed_files);
         resolver.resolve_dependencies()?;
         Ok(())
     }
 }
 
-fn load_file<P: AsRef<Path>>(path: P) -> Result<LoadedFile, &'static str> {
+fn load_file<P: AsRef<Path>>(index: usize, path: P) -> Result<LoadedFile> {
     let path = path.as_ref();
 
-    let source = std::fs::read_to_string(path).map_err(|_| "Failed to read file.")?;
+    let source = std::fs::read_to_string(path).map_err(|_| error!("Failed to read file."))?;
     Ok(LoadedFile {
+        index,
         filepath: path
             .canonicalize()
-            .map_err(|_| "Failed to canonicalize project path.")?,
+            .map_err(|_| error!("Failed to canonicalize project path."))?,
         source,
     })
 }

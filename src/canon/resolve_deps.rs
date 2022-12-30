@@ -9,7 +9,7 @@ use crate::{
         VariableInitializer,
     },
     parsing::tokenization::TokenInfo,
-    util::lformat,
+    util::errors::{Result, error},
 };
 
 pub struct Resolver<'files> {
@@ -27,7 +27,7 @@ impl<'files> Resolver<'files> {
         }
     }
 
-    pub fn resolve_dependencies(&mut self) -> Result<(), &'static str> {
+    pub fn resolve_dependencies(&mut self) -> Result<()> {
         self.register_all_globals();
         dprintln!("Globals = {:#?}", self.globals);
 
@@ -123,7 +123,7 @@ impl<'files> Resolver<'files> {
         }
     }
 
-    fn resolve_dependencies_for_file(&mut self, file_idx: usize) -> Result<(), &'static str> {
+    fn resolve_dependencies_for_file(&mut self, file_idx: usize) -> Result<()> {
         self.begin_scope();
 
         let current_scope = self.scopes.last_mut().unwrap();
@@ -253,7 +253,7 @@ impl<'files> Resolver<'files> {
         }
     }
 
-    fn detect_circular_dependencies(&self) -> Result<(), &'static str> {
+    fn detect_circular_dependencies(&self) -> Result<()> {
         for file_idx in 0..self.files.len() {
             let len_nodes = self.files[file_idx].ast.len();
             for node_idx in 0..len_nodes {
@@ -265,10 +265,7 @@ impl<'files> Resolver<'files> {
         Ok(())
     }
 
-    fn detect_circular_dependencies_for_queued(
-        &self,
-        queued_loc: Dependency,
-    ) -> Result<(), &'static str> {
+    fn detect_circular_dependencies_for_queued(&self, queued_loc: Dependency) -> Result<()> {
         let queued = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx];
         let deps = &queued.deps;
 
@@ -284,12 +281,12 @@ impl<'files> Resolver<'files> {
         needle: Dependency,
         parent_dep: Dependency,
         dep: Dependency,
-    ) -> Result<(), &'static str> {
+    ) -> Result<()> {
         if needle == dep {
             // @TODO:
             // Improve error message
             //
-            return Err(lformat!(
+            return Err(error!(
                 "Circular dependency detected between {:?} and {:?}.",
                 needle,
                 parent_dep
