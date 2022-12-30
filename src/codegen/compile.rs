@@ -49,7 +49,7 @@ impl Compiler {
             AstInfo::Unary(kind, expr) => todo!(),
             AstInfo::Binary(kind, lhs, rhs) => todo!(),
             AstInfo::Block(kind, nodes) => todo!(),
-            AstInfo::Fn(info) => todo!(),
+            AstInfo::Fn(info) => self.parse_fn_decl(&node.token, info),
             AstInfo::Var(info) => todo!(),
             AstInfo::TypeValue(typ) => todo!(),
 

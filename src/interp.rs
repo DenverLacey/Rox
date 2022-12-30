@@ -220,13 +220,12 @@ impl Interpreter {
         let path = path.as_ref();
 
         let loaded_file = load_file(self.loaded_files.len(), path)?;
+        self.loaded_files.push(loaded_file);
         dprintln!("[INFO] Loaded file {:?}", path);
 
-        let parsed_file = parse_file(&loaded_file)?;
-        dprintln!("[INFO] Parsed file {:?}", path);
-
-        self.loaded_files.push(loaded_file);
+        let parsed_file = parse_file(self.loaded_files.last().unwrap())?;
         self.parsed_files.push(parsed_file);
+        dprintln!("[INFO] Parsed file {:?}", path);
 
         Ok(())
     }

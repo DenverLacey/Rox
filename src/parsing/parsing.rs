@@ -550,6 +550,7 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_annotations(&mut self) -> Result<()> {
+        self.expect_token(TokenInfoTag::Percent, "Expected `%` to begin annotation list.")?;
         self.skip_expect_token(TokenInfoTag::SqrBracketOpen, "Expected `[` after `%` in annotation list.")?;
 
         while !self.skip_check_token(TokenInfoTag::SqrBracketClose)? && !self.check_token(TokenInfoTag::End)? {
@@ -570,6 +571,7 @@ impl<'file> Parser<'file> {
         }
 
         self.expect_token(TokenInfoTag::SqrBracketClose, "Expected `]` to terminate annotation list.")?;
+        self.expect_token(TokenInfoTag::Newline, "Annotation lists must be on their own line.")?;
 
         Ok(())
     }
