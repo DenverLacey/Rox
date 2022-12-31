@@ -9,7 +9,7 @@ use crate::{
         VariableInitializer,
     },
     parsing::tokenization::TokenInfo,
-    util::errors::{Result, error},
+    util::errors::{Result, SourceError2},
 };
 
 pub struct Resolver<'files> {
@@ -283,14 +283,8 @@ impl<'files> Resolver<'files> {
         dep: Dependency,
     ) -> Result<()> {
         if needle == dep {
-            // @TODO:
-            // Improve error message
-            //
-            return Err(error!(
-                "Circular dependency detected between {:?} and {:?}.",
-                needle,
-                parent_dep
-            ));
+            let err = self.generate_dependency_error(needle, parent_dep);
+            return Err(err.into());
         }
 
         let needle_node = &self.files[needle.parsed_file_idx].ast[needle.queued_idx];
@@ -309,6 +303,15 @@ impl<'files> Resolver<'files> {
         }
 
         Ok(())
+    }
+
+    // @TODO:
+    // Improve error message
+    fn generate_dependency_error(&self, d1: Dependency, d2: Dependency) -> SourceError2 {
+        let d1 = &self.files[d1.parsed_file_idx].ast[d1.queued_idx];
+        let d2 = &self.files[d2.parsed_file_idx].ast[d2.queued_idx];
+
+        SourceError2::new("Circular dependency detected.", d1.node.token.loc, "This and...", d2.node.token.loc, "...this depend on each other.")
     }
 }
 
