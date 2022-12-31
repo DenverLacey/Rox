@@ -101,7 +101,7 @@ impl Interpreter {
             self.parsed_files.first().unwrap().ast
         );
 
-        let exe = compile_executable(&self.parsed_files)?;
+        let exe = compile_executable(&mut self.parsed_files)?;
 
         Ok(exe)
     }
