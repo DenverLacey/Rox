@@ -1,6 +1,5 @@
 use crate::{typing::value_type::runtime_type, codegen::exe::Executable};
 
-const NUM_REGISTERS: usize = 32 * std::mem::size_of::<runtime_type::Int>();
 const STACK_SIZE: usize = std::u16::MAX as usize;
 
 pub type Size = u16;
@@ -38,7 +37,6 @@ impl Stack {
 }
 
 pub struct VM<'exe> {
-    registers: [u8; NUM_REGISTERS],
     stack: Stack,
     exe: &'exe Executable,
 }
@@ -46,7 +44,6 @@ pub struct VM<'exe> {
 impl<'exe> VM<'exe> {
     pub fn new(exe: &'exe Executable) -> Self {
         Self {
-            registers: [0; NUM_REGISTERS],
             stack: Stack::new(),
             exe,
         }
@@ -59,7 +56,6 @@ impl<'exe> VM<'exe> {
         T: Copy + Sized,
     {
         let size = std::mem::size_of_val(&value);
-
         let ptr = &value as *const T as *const u8;
         let data: &[u8] = unsafe { std::slice::from_raw_parts(ptr, size) };
         self.stack.push(data);
