@@ -104,7 +104,12 @@ fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -
         VariableInitializer::TypeAndExpr(typ, expr) => {
             typecheck_node(interp, typ)?;
             if !matches!(typ.typ, Some(Type::Type)) {
-                return Err(SourceError::new("Specified type in variable declaration was not a type.", typ.token.loc, "This was expected to be a type signature.").into());
+                return Err(SourceError::new(
+                    "Specified type in variable declaration was not a type.",
+                    typ.token.loc,
+                    "This was expected to be a type signature.",
+                )
+                .into());
             }
 
             typecheck_node(interp, expr)?;
@@ -118,7 +123,14 @@ fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -
             };
 
             if expr_type != typ_value {
-                return Err(SourceError2::new("Specified type and type of initializer don't match.", typ.token.loc, "Specified type is here.", expr.token.loc, format!("This expression has type `{}`.", expr_type)).into());
+                return Err(SourceError2::new(
+                    "Specified type and type of initializer don't match.",
+                    typ.token.loc,
+                    "Specified type is here.",
+                    expr.token.loc,
+                    format!("This expression has type `{}`.", expr_type),
+                )
+                .into());
             }
 
             var_type = typ_value;
@@ -126,7 +138,12 @@ fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -
         VariableInitializer::Type(typ) => {
             typecheck_node(interp, typ)?;
             if !matches!(typ.typ, Some(Type::Type)) {
-                return Err(SourceError::new("Specified type in variable declaration was not a type.", typ.token.loc, "This is not a type.").into());
+                return Err(SourceError::new(
+                    "Specified type in variable declaration was not a type.",
+                    typ.token.loc,
+                    "This is not a type.",
+                )
+                .into());
             }
 
             let AstInfo::TypeValue(typ_value) = typ.info else {
@@ -148,6 +165,7 @@ fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -
     let binding = ScopeBinding::Var(VariableBinding {
         is_mut: info.mutable,
         typ: var_type,
+        addr: 0,
     });
     scope.add_binding(
         ident.clone(),
@@ -184,7 +202,12 @@ fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn
 
         typecheck_node(interp, typ)?;
         if !matches!(typ.typ, Some(Type::Type)) {
-            return Err(SourceError::new("Non-type expression in function parameter type annotation.", typ.token.loc, "This should be a type.").into());
+            return Err(SourceError::new(
+                "Non-type expression in function parameter type annotation.",
+                typ.token.loc,
+                "This should be a type.",
+            )
+            .into());
         }
 
         let AstInfo::TypeValue(param_type) = typ.info else {
@@ -195,6 +218,7 @@ fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn
         let param_binding = ScopeBinding::Var(VariableBinding {
             is_mut: false,
             typ: param_type,
+            addr: 0,
         });
 
         let param_scope = &mut interp.scopes[info.params.scope.0];
@@ -215,7 +239,12 @@ fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn
         typecheck_node(interp, returns)?;
 
         if !matches!(returns.typ, Some(Type::Type)) {
-            return Err(SourceError::new("Expression expected to be a type for a function return type.", returns.token.loc, "This should be a type.").into());
+            return Err(SourceError::new(
+                "Expression expected to be a type for a function return type.",
+                returns.token.loc,
+                "This should be a type.",
+            )
+            .into());
         }
 
         let AstInfo::TypeValue(returns) = returns.info else {
@@ -232,6 +261,7 @@ fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn
 
     let fn_type = interp.get_or_create_function_type(fn_info);
     let fn_id = interp.create_function(ident, fn_type);
+    info.id = Some(fn_id);
 
     let binding = ScopeBinding::Fn(FunctionBinding {
         id: fn_id,
@@ -377,12 +407,31 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
             typecheck_node(interp, expr)?;
 
             if expr.typ.is_none() {
-                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    expr.token.loc,
+                    format!(
+                        "Type should be `{}` or `{}` but found no type.",
+                        Type::Int,
+                        Type::Float
+                    ),
+                )
+                .into());
             }
 
             let expr_type = expr.typ.unwrap();
             if expr_type != Type::Int && expr_type != Type::Float {
-                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, expr_type)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    expr.token.loc,
+                    format!(
+                        "Type should be `{}` or `{}` but found `{}`.",
+                        Type::Int,
+                        Type::Float,
+                        expr_type
+                    ),
+                )
+                .into());
             }
 
             Some(expr_type)
@@ -391,12 +440,22 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
             typecheck_node(interp, expr)?;
 
             if expr.typ.is_none() {
-                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` but found no type.", Type::Bool)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    expr.token.loc,
+                    format!("Type should be `{}` but found no type.", Type::Bool),
+                )
+                .into());
             }
 
             let expr_type = expr.typ.unwrap();
             if expr_type != Type::Bool {
-                return Err(SourceError::new("Type Mismatch.", expr.token.loc, format!("Type should be `{}` but found `{}`.", Type::Bool, expr_type)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    expr.token.loc,
+                    format!("Type should be `{}` but found `{}`.", Type::Bool, expr_type),
+                )
+                .into());
             }
 
             Some(expr_type)
@@ -406,7 +465,12 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
         AstUnaryKind::Deref => {
             typecheck_node(interp, expr)?;
             if expr.typ.is_none() {
-                return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, "Type should be a pointer type but found no type.").into());
+                return Err(SourceError::new(
+                    "Dereference of non-pointer value.",
+                    expr.token.loc,
+                    "Type should be a pointer type but found no type.",
+                )
+                .into());
             }
 
             let expr_type = expr.typ.unwrap();
@@ -416,10 +480,20 @@ fn typecheck_unary(node: &mut Ast) -> TypecheckResult {
                 if let TypeInfo::Pointer(type_info) = typ {
                     deref_type = type_info.pointee_type;
                 } else {
-                    return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, format!("Type should be a pointer type but found `{}`.", expr_type)).into());
+                    return Err(SourceError::new(
+                        "Dereference of non-pointer value.",
+                        expr.token.loc,
+                        format!("Type should be a pointer type but found `{}`.", expr_type),
+                    )
+                    .into());
                 }
             } else {
-                return Err(SourceError::new("Dereference of non-pointer value.", expr.token.loc, format!("Type should be a pointer type but found `{}`.", expr_type)).into());
+                return Err(SourceError::new(
+                    "Dereference of non-pointer value.",
+                    expr.token.loc,
+                    format!("Type should be a pointer type but found `{}`.", expr_type),
+                )
+                .into());
             }
 
             Some(deref_type)
@@ -484,7 +558,11 @@ fn typecheck_binary(
     let interp = Interpreter::get_mut();
 
     let typ = match kind {
-        AstBinaryKind::Add | AstBinaryKind::Sub | AstBinaryKind::Mul | AstBinaryKind::Div | AstBinaryKind::Mod => {
+        AstBinaryKind::Add
+        | AstBinaryKind::Sub
+        | AstBinaryKind::Mul
+        | AstBinaryKind::Div
+        | AstBinaryKind::Mod => {
             typecheck_node(interp, lhs)?;
             typecheck_node(interp, rhs)?;
 
@@ -497,15 +575,42 @@ fn typecheck_binary(
             };
 
             if lhs_type != Type::Int && lhs_type != Type::Float {
-                return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, lhs_type)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    lhs.token.loc,
+                    format!(
+                        "Type should be `{}` or `{}` but found `{}`.",
+                        Type::Int,
+                        Type::Float,
+                        lhs_type
+                    ),
+                )
+                .into());
             }
 
             if rhs_type != Type::Int && rhs_type != Type::Float {
-                return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found `{}`.", Type::Int, Type::Float, rhs_type)).into());
+                return Err(SourceError::new(
+                    "Type Mismatch.",
+                    rhs.token.loc,
+                    format!(
+                        "Type should be `{}` or `{}` but found `{}`.",
+                        Type::Int,
+                        Type::Float,
+                        rhs_type
+                    ),
+                )
+                .into());
             }
 
             if lhs_type != rhs_type {
-                return Err(SourceError2::new("Type Mistmatch.", lhs.token.loc, format!("`{}`.", lhs_type), rhs.token.loc, format!("`{}`", rhs_type)).into());
+                return Err(SourceError2::new(
+                    "Type Mistmatch.",
+                    lhs.token.loc,
+                    format!("`{}`.", lhs_type),
+                    rhs.token.loc,
+                    format!("`{}`", rhs_type),
+                )
+                .into());
             }
 
             Some(lhs_type)
@@ -526,7 +631,14 @@ fn typecheck_binary(
             // Enforce immutability
             //
             if lhs_type != rhs_type {
-                return Err(SourceError2::new("Type mismatch.", lhs.token.loc, format!("`{}`.", lhs_type), rhs.token.loc, format!("`{}`", rhs_type)).into());
+                return Err(SourceError2::new(
+                    "Type mismatch.",
+                    lhs.token.loc,
+                    format!("`{}`.", lhs_type),
+                    rhs.token.loc,
+                    format!("`{}`", rhs_type),
+                )
+                .into());
             }
 
             None
@@ -540,10 +652,23 @@ fn typecheck_binary(
                 if let TypeInfo::Function(fn_info) = type_info {
                     fn_info
                 } else {
-                    return Err(SourceError::new("Cannot call something that isn't a function.", lhs.token.loc, format!("Should be a function type but is `{}`.", Type::Composite(lhs_type))).into());
+                    return Err(SourceError::new(
+                        "Cannot call something that isn't a function.",
+                        lhs.token.loc,
+                        format!(
+                            "Should be a function type but is `{}`.",
+                            Type::Composite(lhs_type)
+                        ),
+                    )
+                    .into());
                 }
             } else {
-                return Err(SourceError::new("Cannot call something that isn't a function.", lhs.token.loc, "Should be a function type but has no type.").into());
+                return Err(SourceError::new(
+                    "Cannot call something that isn't a function.",
+                    lhs.token.loc,
+                    "Should be a function type but has no type.",
+                )
+                .into());
             };
 
             let AstInfo::Block(AstBlockKind::Args, args) = &rhs.info else {
@@ -552,11 +677,28 @@ fn typecheck_binary(
 
             if fn_info.params.len() != args.len() {
                 if args.is_empty() {
-                    return Err(SourceError::new("Incorrect number of arguments.", rhs.token.loc, format!("Expected {} argument(s) but was given 0.", fn_info.params.len())).into());
+                    return Err(SourceError::new(
+                        "Incorrect number of arguments.",
+                        rhs.token.loc,
+                        format!(
+                            "Expected {} argument(s) but was given 0.",
+                            fn_info.params.len()
+                        ),
+                    )
+                    .into());
                 } else {
                     let first_bad = std::cmp::min(fn_info.params.len(), args.len());
                     let arg = &args[first_bad];
-                    return Err(SourceError::new("Incorrect number of arguments.", arg.token.loc, format!("Expected {} argument(s) but was given {}.", fn_info.params.len(), args.len())).into());
+                    return Err(SourceError::new(
+                        "Incorrect number of arguments.",
+                        arg.token.loc,
+                        format!(
+                            "Expected {} argument(s) but was given {}.",
+                            fn_info.params.len(),
+                            args.len()
+                        ),
+                    )
+                    .into());
                 }
             }
 
@@ -568,7 +710,12 @@ fn typecheck_binary(
                 let expected = fn_info.params[i];
 
                 if given != expected {
-                    return Err(SourceError::new("Type mismatch.", arg.token.loc, format!("Type should be `{}` but is `{}`.", expected, given)).into());
+                    return Err(SourceError::new(
+                        "Type mismatch.",
+                        arg.token.loc,
+                        format!("Type should be `{}` but is `{}`.", expected, given),
+                    )
+                    .into());
                 }
             }
 

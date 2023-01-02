@@ -1,4 +1,7 @@
-use crate::{interp::FunctionInfo, util::errors::{error, Result}};
+use crate::{
+    interp::FunctionInfo,
+    util::errors::{error, Result},
+};
 
 pub struct Executable {
     pub constants: Box<[u8]>,
@@ -107,7 +110,9 @@ impl ExecutableBuilder {
             constants,
             str_constants,
             funcs,
-            entry_point: self.entry_point.ok_or_else(|| error!("No entry point function designated."))?,
+            entry_point: self
+                .entry_point
+                .ok_or_else(|| error!("No entry point function designated."))?,
         })
     }
 }

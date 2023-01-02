@@ -3,11 +3,11 @@ use enum_tags::TaggedEnum;
 use crate::{
     interp::{LoadedFile, ParsedFile},
     ir::{
+        annotations::{self, Annotations},
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport, AstInfoTypeSignature,
-            AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport,
+            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
         },
-        annotations::{Annotations, self},
     },
     parsing::tokenization::*,
     util::errors::{error, Result, SourceError},
@@ -42,7 +42,10 @@ struct Parser<'file> {
 
 impl<'file> Parser<'file> {
     fn new(tokenizer: Tokenizer<'file>) -> Self {
-        Self { tokenizer, current_annotations: Default::default() }
+        Self {
+            tokenizer,
+            current_annotations: Default::default(),
+        }
     }
 }
 
@@ -96,7 +99,7 @@ impl<'file> Parser<'file> {
         }
 
         let token = self.peek_token(0).unwrap();
-        Err(SourceError::new(format!("Unexpected `{}`.", token.info), token.loc,  err).into())
+        Err(SourceError::new(format!("Unexpected `{}`.", token.info), token.loc, err).into())
     }
 
     fn skip_expect_token(&mut self, kind: TokenInfoTag, err: &'static str) -> Result<Token> {
@@ -120,10 +123,13 @@ impl<'file> Parser<'file> {
     }
 
     fn clear_annontations_for_valid(&mut self, valid: Annotations) -> Result<Annotations> {
-        let others = self.current_annotations & !valid; 
+        let others = self.current_annotations & !valid;
         if others != Annotations::default() {
             // @TODO: Imrpove error message
-            return Err(error!("Invalid annotations: valid = `{:?}` but given = `{:?}`", valid, self.current_annotations));
+            return Err(error!(
+                "Invalid annotations: valid = `{:?}` but given = `{:?}`",
+                valid, self.current_annotations
+            ));
         }
 
         let annons = self.current_annotations;
@@ -180,6 +186,7 @@ impl<'file> Parser<'file> {
                 params,
                 returns,
                 body,
+                id: None,
             })),
         ))
     }
@@ -550,11 +557,22 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_annotations(&mut self) -> Result<()> {
-        self.expect_token(TokenInfoTag::Percent, "Expected `%` to begin annotation list.")?;
-        self.skip_expect_token(TokenInfoTag::SqrBracketOpen, "Expected `[` after `%` in annotation list.")?;
+        self.expect_token(
+            TokenInfoTag::Percent,
+            "Expected `%` to begin annotation list.",
+        )?;
+        self.skip_expect_token(
+            TokenInfoTag::SqrBracketOpen,
+            "Expected `[` after `%` in annotation list.",
+        )?;
 
-        while !self.skip_check_token(TokenInfoTag::SqrBracketClose)? && !self.check_token(TokenInfoTag::End)? {
-            let tok = self.expect_token(TokenInfoTag::Ident, "Expected an annotation in annotation list.")?;
+        while !self.skip_check_token(TokenInfoTag::SqrBracketClose)?
+            && !self.check_token(TokenInfoTag::End)?
+        {
+            let tok = self.expect_token(
+                TokenInfoTag::Ident,
+                "Expected an annotation in annotation list.",
+            )?;
             let TokenInfo::Ident(annon) = tok.info else {
                 unreachable!();
             };
@@ -570,8 +588,14 @@ impl<'file> Parser<'file> {
             }
         }
 
-        self.expect_token(TokenInfoTag::SqrBracketClose, "Expected `]` to terminate annotation list.")?;
-        self.expect_token(TokenInfoTag::Newline, "Annotation lists must be on their own line.")?;
+        self.expect_token(
+            TokenInfoTag::SqrBracketClose,
+            "Expected `]` to terminate annotation list.",
+        )?;
+        self.expect_token(
+            TokenInfoTag::Newline,
+            "Annotation lists must be on their own line.",
+        )?;
 
         Ok(())
     }

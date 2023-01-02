@@ -44,7 +44,12 @@ impl SourceError {
     pub fn new(err: impl Into<String>, loc: CodeLocation, label: impl Into<String>) -> Self {
         let interp = Interpreter::get();
         let file = &interp.loaded_files[loc.loaded_file_idx];
-        let src = NamedSource::new(file.filepath.to_str().expect("[INTERNAL ERR] Loaded file's filepath not valid UTF-8"), file.source.clone());
+        let src = NamedSource::new(
+            file.filepath
+                .to_str()
+                .expect("[INTERNAL ERR] Loaded file's filepath not valid UTF-8"),
+            file.source.clone(),
+        );
 
         Self {
             src,
@@ -56,10 +61,21 @@ impl SourceError {
 }
 
 impl SourceError2 {
-    pub fn new(err: impl Into<String>, loc1: CodeLocation, label1: impl Into<String>, loc2: CodeLocation, label2: impl Into<String>) -> Self {
+    pub fn new(
+        err: impl Into<String>,
+        loc1: CodeLocation,
+        label1: impl Into<String>,
+        loc2: CodeLocation,
+        label2: impl Into<String>,
+    ) -> Self {
         let interp = Interpreter::get();
         let file = &interp.loaded_files[loc1.loaded_file_idx];
-        let src = NamedSource::new(file.filepath.to_str().expect("[INTERNAL ERR] Loaded file's filepath not valid UTF-8"), file.source.clone());
+        let src = NamedSource::new(
+            file.filepath
+                .to_str()
+                .expect("[INTERNAL ERR] Loaded file's filepath not valid UTF-8"),
+            file.source.clone(),
+        );
 
         Self {
             src,
@@ -71,4 +87,3 @@ impl SourceError2 {
         }
     }
 }
-

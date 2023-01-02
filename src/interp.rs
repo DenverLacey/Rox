@@ -19,7 +19,7 @@ use crate::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
         },
     },
-    util::errors::{error, Result},
+    util::errors::{error, Result}, runtime::vm::VM,
 };
 
 static mut INTERP: Interpreter = Interpreter::new();
@@ -107,7 +107,8 @@ impl Interpreter {
     }
 
     pub fn execute_executable(&mut self, exe: &Executable) -> Result<()> {
-        todo!()
+        let mut vm = VM::new(exe);
+        vm.execute()
     }
 }
 

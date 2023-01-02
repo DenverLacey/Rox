@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
 use crate::{
-    canon::scoping::ScopeIndex, interp::Interpreter, parsing::tokenization::Token,
+    canon::scoping::{FuncID, ScopeIndex},
+    interp::Interpreter,
+    parsing::tokenization::Token,
     typing::value_type::Type,
 };
 
@@ -51,7 +53,7 @@ pub enum AstBinaryKind {
     Param,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AstBlockKind {
     Block,
     Comma,
@@ -67,6 +69,7 @@ pub struct AstInfoFn {
     pub params: Ast,
     pub returns: Option<Ast>,
     pub body: Ast,
+    pub id: Option<FuncID>,
 }
 
 #[derive(Debug)]

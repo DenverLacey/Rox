@@ -3,9 +3,9 @@ mod codegen;
 mod interp;
 mod ir;
 mod parsing;
+mod runtime;
 mod typing;
 mod util;
-mod runtime;
 
 use crate::interp::Interpreter;
 use crate::util::errors::{error, Result};

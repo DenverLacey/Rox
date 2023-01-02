@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::interp::Interpreter;
+use crate::{interp::Interpreter, runtime::vm::Size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -14,8 +14,8 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn size(&self) -> usize {
-        match self {
+    pub fn size(&self) -> Size {
+        let size: usize = match self {
             Self::Bool => std::mem::size_of::<runtime_type::Bool>(),
             Self::Char => std::mem::size_of::<runtime_type::Char>(),
             Self::Int => std::mem::size_of::<runtime_type::Int>(),
@@ -30,16 +30,21 @@ impl Type {
                     TypeInfo::Pointer(_) => std::mem::size_of::<*const ()>(),
                     TypeInfo::Array(info) => {
                         let count = info.size;
-                        let element_size = info.element_type.size();
+                        let element_size = info.element_type.size() as usize;
                         count * element_size
                     }
-                    TypeInfo::Record(info) => {
-                        info.fields.iter().map(|field| field.typ.size()).sum()
-                    }
+                    TypeInfo::Record(info) => info
+                        .fields
+                        .iter()
+                        .map(|field| field.typ.size() as usize)
+                        .sum(),
                     TypeInfo::Function(_) => std::mem::size_of::<*const ()>(),
                 }
             }
-        }
+        };
+
+        size.try_into()
+            .expect("[INTERNAL ERR] type size is too big to fit in a `Size`.")
     }
 
     pub fn is_pointer(&self) -> bool {
@@ -141,6 +146,7 @@ pub mod runtime_type {
     pub type Char = char;
     pub type Int = i64;
     pub type Float = f64;
+    pub type Pointer = *const ();
 
     pub struct String {
         pub len: Int,

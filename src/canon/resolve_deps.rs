@@ -311,7 +311,13 @@ impl<'files> Resolver<'files> {
         let d1 = &self.files[d1.parsed_file_idx].ast[d1.queued_idx];
         let d2 = &self.files[d2.parsed_file_idx].ast[d2.queued_idx];
 
-        SourceError2::new("Circular dependency detected.", d1.node.token.loc, "This and...", d2.node.token.loc, "...this depend on each other.")
+        SourceError2::new(
+            "Circular dependency detected.",
+            d1.node.token.loc,
+            "This and...",
+            d2.node.token.loc,
+            "...this depend on each other.",
+        )
     }
 }
 

@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use crate::{
     interp::Interpreter,
     ir::ast::{Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, VariableInitializer},
+    parsing::tokenization::CodeLocation,
+    runtime::vm::Addr,
     typing::value_type::Type,
-    util::errors::{Result, SourceError}, parsing::tokenization::CodeLocation,
+    util::errors::{Result, SourceError},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,6 +33,20 @@ impl Scope {
 }
 
 impl Scope {
+    pub fn find_binding_mut(&mut self, ident: &str) -> Option<&mut ScopeBinding> {
+        if let Some(binding) = self.bindings.get_mut(ident) {
+            return Some(binding);
+        }
+
+        if let Some(parent) = self.parent {
+            let interp = Interpreter::get_mut();
+            let parent = &mut interp.scopes[parent.0];
+            return parent.find_binding_mut(ident);
+        }
+
+        None
+    }
+
     pub fn find_binding(&self, ident: &str) -> Option<&ScopeBinding> {
         if let Some(binding) = self.bindings.get(ident) {
             return Some(binding);
@@ -80,6 +96,7 @@ pub enum ScopeBinding {
 pub struct VariableBinding {
     pub is_mut: bool,
     pub typ: Type,
+    pub addr: Addr,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

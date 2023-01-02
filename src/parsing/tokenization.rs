@@ -49,6 +49,7 @@ pub enum TokenInfo {
 
     // Literals
     Ident(String), // @IMPROVE: This could probably be a &str with some lifetime
+    Bool(bool),
     Int(i64),
     Float(f64),
     String(String), // @IMPOVE: ^^
@@ -89,6 +90,7 @@ impl TokenInfo {
         match *self {
             TokenInfo::End => TokenPrecedence::None,
             TokenInfo::Ident(_) => TokenPrecedence::None,
+            TokenInfo::Bool(_) => TokenPrecedence::None,
             TokenInfo::Int(_) => TokenPrecedence::None,
             TokenInfo::Float(_) => TokenPrecedence::None,
             TokenInfo::String(_) => TokenPrecedence::None,
@@ -124,6 +126,7 @@ impl Display for TokenInfo {
         match self {
             TokenInfo::End => write!(f, "EOF"),
             TokenInfo::Ident(_) => write!(f, "identifier"),
+            TokenInfo::Bool(_) => write!(f, "Bool"),
             TokenInfo::Int(_) => write!(f, "Int"),
             TokenInfo::Float(_) => write!(f, "Float"),
             TokenInfo::String(_) => write!(f, "String"),
@@ -244,7 +247,10 @@ impl<'file> Tokenizer<'file> {
     }
 
     fn current_location(&self) -> CodeLocation {
-        CodeLocation { loaded_file_idx: self.loaded_file_idx, span: self.cur_offset.into() }
+        CodeLocation {
+            loaded_file_idx: self.loaded_file_idx,
+            span: self.cur_offset.into(),
+        }
     }
 
     fn create_location(&self, span: impl Into<SourceSpan>) -> CodeLocation {
