@@ -148,6 +148,7 @@ pub mod runtime_type {
     pub type Float = f64;
     pub type Pointer = *const ();
 
+    #[derive(Clone, Copy)]
     pub struct String {
         pub len: Int,
         pub chars: *mut u8,

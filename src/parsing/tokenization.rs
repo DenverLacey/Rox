@@ -443,6 +443,8 @@ impl<'file> Tokenizer<'file> {
 
         let tok_loc = self.create_location((span_start, word.len()));
         match word.as_str() {
+            "true" => Token::new(tok_loc, TokenInfo::Bool(true)),
+            "false" => Token::new(tok_loc, TokenInfo::Bool(false)),
             "import" => Token::new(tok_loc, TokenInfo::Import),
             "let" => Token::new(tok_loc, TokenInfo::Let),
             "mut" => Token::new(tok_loc, TokenInfo::Mut),

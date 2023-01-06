@@ -1,52 +1,86 @@
-use crate::{codegen::{exe::Executable, inst::Instruction}, typing::value_type::runtime_type::{Int, Char, Float, Pointer}, util::errors::Result, interp::FunctionInfo};
+use std::cell::UnsafeCell;
+
+use crate::{
+    codegen::{exe::Executable, inst::Instruction},
+    interp::{FunctionInfo, Interpreter},
+    typing::value_type::{
+        runtime_type::{self, Bool, Char, Float, Int, Pointer},
+        Type, TypeInfo,
+    },
+    util::{byte_reader::ByteReader, errors::Result}, runtime::builtins::Builtin,
+};
 
 const STACK_SIZE: usize = std::u16::MAX as usize;
 
 pub type Size = u16;
 pub type Addr = u16;
 
-pub struct Stack {
+struct StackInner {
     buffer: [u8; STACK_SIZE],
     top: usize,
+}
+
+pub struct Stack {
+    inner: UnsafeCell<StackInner>,
 }
 
 impl Stack {
     pub fn new() -> Self {
         Stack {
-            buffer: [0; STACK_SIZE],
-            top: 0,
+            inner: UnsafeCell::new(StackInner {
+                buffer: [0; STACK_SIZE],
+                top: 0,
+            }),
         }
+    }
+
+    pub fn top(&self) -> usize {
+        let me = unsafe { &*self.inner.get() };
+        me.top
+    }
+
+    pub fn get_buffer(&self) -> &[u8] {
+        let me = unsafe { &*self.inner.get() };
+        me.buffer.as_slice()
     }
 
     pub fn get(&self, size: Size, addr: Addr) -> &[u8] {
         let size = size as usize;
         let addr = addr as usize;
-        self.buffer.get(addr..(addr + size)).expect("Bad access to stack.")
+
+        let me = unsafe { &*self.inner.get() };
+        me.buffer
+            .get(addr..(addr + size))
+            .expect("Bad access to stack")
     }
 
-    pub fn push(&mut self, data: &[u8]) {
-        if self.top + data.len() >= STACK_SIZE {
+    pub fn push(&self, data: &[u8]) {
+        let me = unsafe { &mut *self.inner.get() };
+
+        if me.top + data.len() >= STACK_SIZE {
             panic!("Stack overflow.");
         }
 
-        let range = self.top..(self.top + data.len());
-        self.buffer[range].copy_from_slice(data);
-        self.top += data.len();
+        let range = me.top..(me.top + data.len());
+        me.buffer[range].copy_from_slice(data);
+        me.top += data.len();
     }
 
-    pub fn pop(&mut self, size: Size) -> &[u8] {
+    pub fn pop(&self, size: Size) -> &[u8] {
+        let me = unsafe { &mut *self.inner.get() };
         let size = size as usize;
-        
-        if self.top < size {
+
+        if me.top < size {
             panic!("Stack underflow.");
         }
 
-        self.top -= size;
-        let data = &self.buffer[self.top..(self.top + size)];
+        me.top -= size;
+        let data = &me.buffer[me.top..(me.top + size)];
+
         data
     }
 
-    fn push_value<T>(&mut self, value: T)
+    fn push_value<T>(&self, value: T)
     where
         T: Copy + Sized,
     {
@@ -56,7 +90,7 @@ impl Stack {
         self.push(data);
     }
 
-    fn pop_value<T>(&mut self) -> T
+    fn pop_value<T>(&self) -> T
     where
         T: Copy + Sized,
     {
@@ -69,28 +103,31 @@ impl Stack {
 }
 
 struct CallFrame {
-    ip: usize,
-    code: &'static [u8],
+    reader: ByteReader<'static>,
     stack_bottom: Addr,
 }
 
-impl CallFrame {
-    fn read<T: Copy + Sized>(&mut self) -> T {
-        let size = std::mem::size_of::<T>();
-        let data = self.code.get(self.ip..(self.ip + size)).expect("[INTERNAL ERR] Attempt to read value failed due to not enough bytes in bytecode remaining.");
-        let ptr = data.as_ptr() as *const T;
-        let value = unsafe { *ptr };
+macro_rules! un_op {
+    ($T:ty, $TR:ty, $op:tt, $me:ident) => {{
+        let a: $T = $me.stack.pop_value();
+        let r: $TR = $op a;
+        $me.stack.push_value(r);
+    }};
+}
 
-        self.ip += size;
-        value
-    }
+macro_rules! bin_op {
+    ($TA:ty, $TB:ty, $TR:ty, $op:tt, $me:ident) => {{
+        let b: $TB = $me.stack.pop_value();
+        let a: $TA = $me.stack.pop_value();
+        let r: $TR = a $op b;
+        $me.stack.push_value(r);
+    }};
 }
 
 pub struct VM<'exe> {
     stack: Stack,
     frames: Vec<CallFrame>,
     exe: &'exe Executable,
-    ip: usize,
 }
 
 impl<'exe> VM<'exe> {
@@ -99,27 +136,32 @@ impl<'exe> VM<'exe> {
             stack: Stack::new(),
             frames: Vec::new(),
             exe,
-            ip: 0,
         }
     }
 
     pub fn execute(&mut self) -> Result<()> {
-        self.run_global_scope()
+        self.run_global_scope()?;
+        self.print_stack(&[Type::Int, Type::Int, Type::Bool]);
+        Ok(())
     }
 }
 
 impl<'exe> VM<'exe> {
     fn run_global_scope(&mut self) -> Result<()> {
+        assert!(!self.exe.funcs.is_empty(), "No global scope to execute.");
         let global_scope = &self.exe.funcs[0];
         self.call(global_scope, 0);
         self.run()
     }
 
     fn run(&mut self) -> Result<()> {
-        let mut frame = self.frames.last_mut().expect("[INTERNAL ERR] No frames to run.");
+        let mut frame = self
+            .frames
+            .last_mut()
+            .expect("[INTERNAL ERR] No frames to run.");
 
-        while frame.ip < frame.code.len() {
-            let inst: Instruction = frame.read();
+        while frame.reader.offset() < frame.reader.bytes().len() {
+            let inst: Instruction = frame.reader.read();
 
             use Instruction::*;
             match inst {
@@ -131,70 +173,74 @@ impl<'exe> VM<'exe> {
                 Lit_0 => self.stack.push_value(0 as Int),
                 Lit_1 => self.stack.push_value(1 as Int),
                 Lit_Char => {
-                    let c: Char = frame.read();
+                    let c: Char = frame.reader.read();
                     self.stack.push_value(c);
                 }
                 Lit_Int => {
-                    let k: Int = frame.read();
+                    let k: Int = frame.reader.read();
                     self.stack.push_value(k);
                 }
                 Lit_Float => {
-                    let f: Float = frame.read();
+                    let f: Float = frame.reader.read();
                     self.stack.push_value(f);
                 }
                 Lit_Pointer => {
-                    let p: Pointer = frame.read();
+                    let p: Pointer = frame.reader.read();
                     self.stack.push_value(p);
                 }
 
                 // Constants
                 PushConst => {
-                    let size: Size = frame.read();
-                    let idx: usize = frame.read();
-                    let constant = self.exe.constants.get(idx..(idx + size as usize)).expect("[INTERNAL ERR] Bad constant!!!");
+                    let size: Size = frame.reader.read();
+                    let idx: usize = frame.reader.read();
+                    let constant = self
+                        .exe
+                        .constants
+                        .get(idx..(idx + size as usize))
+                        .expect("[INTERNAL ERR] Bad constant!!!");
                     self.stack.push(constant);
                 }
                 PushConst_Str => todo!(),
 
                 // Arithmetic
-                Int_Add => todo!(),
-                Int_Sub => todo!(),
-                Int_Mul => todo!(),
-                Int_Div => todo!(),
-                Int_Neg => todo!(),
-                Int_Mod => todo!(),
+                Int_Add => bin_op!(Int, Int, Int, +, self),
+                Int_Sub => bin_op!(Int, Int, Int, -, self),
+                Int_Mul => bin_op!(Int, Int, Int, *, self),
+                Int_Div => bin_op!(Int, Int, Int, /, self),
+                Int_Neg => un_op!(Int, Int, -, self),
+                Int_Mod => bin_op!(Int, Int, Int, %, self),
                 Int_Inc => todo!(),
                 Int_Dec => todo!(),
 
-                Float_Add => todo!(),
-                Float_Sub => todo!(),
-                Float_Mul => todo!(),
-                Float_Div => todo!(),
-                Float_Neg => todo!(),
+                Float_Add => bin_op!(Float, Float, Float, +, self),
+                Float_Sub => bin_op!(Float, Float, Float, -, self),
+                Float_Mul => bin_op!(Float, Float, Float, *, self),
+                Float_Div => bin_op!(Float, Float, Float, /, self),
+                Float_Neg => un_op!(Float, Float, -, self),
 
                 // Bitwise
-                Bit_Not => todo!(),
-                Bit_Shl => todo!(),
-                Bit_Shr => todo!(),
-                Bit_And => todo!(),
-                Bit_Or => todo!(),
-                Bit_Xor => todo!(),
+                Bit_Not => un_op!(Int, Int, !, self),
+                Bit_Shl => bin_op!(Int, Int, Int, <<, self),
+                Bit_Shr => bin_op!(Int, Int, Int, >>, self),
+                Bit_And => bin_op!(Int, Int, Int, &, self),
+                Bit_Or => bin_op!(Int, Int, Int, |, self),
+                Bit_Xor => bin_op!(Int, Int, Int, ^, self),
 
                 // Logic
-                And => todo!(),
-                Or => todo!(),
-                Not => todo!(),
+                And => bin_op!(Bool, Bool, Bool, &&, self),
+                Or => bin_op!(Bool, Bool, Bool, ||, self),
+                Not => un_op!(Bool, Bool, !, self),
 
                 // Comparison
                 Eq => {
-                    let size: Size = frame.read();
+                    let size: Size = frame.reader.read();
                     let b = self.stack.pop(size);
                     let a = self.stack.pop(size);
                     let result = a.iter().eq(b.iter());
                     self.stack.push_value(result);
                 }
                 Ne => {
-                    let size: Size = frame.read();
+                    let size: Size = frame.reader.read();
                     let b = self.stack.pop(size);
                     let a = self.stack.pop(size);
                     let result = a.iter().ne(b.iter());
@@ -214,32 +260,32 @@ impl<'exe> VM<'exe> {
                 // Stack Operations
                 Move => todo!(),
                 Dup => {
-                    let size: Size = frame.read();
-                    let addr: Addr = frame.read();
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
                     let data = self.stack.get(size, addr + frame.stack_bottom);
                     self.stack.push(data);
                 }
                 DupGlobal => {
-                    let size: Size = frame.read();
-                    let addr: Addr = frame.read();
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
                     let data = self.stack.get(size, addr);
                     self.stack.push(data);
                 }
                 PushPtr => todo!(),
                 PushPtrGlobal => todo!(),
                 Pop => {
-                    let size: Size = frame.read();
+                    let size: Size = frame.reader.read();
                     self.stack.pop(size);
                 }
 
                 // Branching
                 Jump => {
-                    let jump: Addr = frame.read();
-                    frame.ip += jump as usize;
+                    let jump: Addr = frame.reader.read();
+                    frame.reader.jump(jump as usize);
                 }
-                Loop => {
-                    let jump: Addr = frame.read();
-                    frame.ip -= jump as usize;
+                JumpBack => {
+                    let jump: Addr = frame.reader.read();
+                    frame.reader.jump_back(jump as usize);
                 }
                 JumpTrue => todo!(),
                 JumpFalse => todo!(),
@@ -248,7 +294,11 @@ impl<'exe> VM<'exe> {
 
                 // Invocation
                 Call => todo!(),
-                CallBuiltin => todo!(),
+                CallBuiltin => {
+                    let size: Size = frame.reader.read();
+                    let f: Builtin = frame.reader.read();
+                    f(&mut self.stack, size);
+                }
 
                 Ret => todo!(),
             }
@@ -258,15 +308,77 @@ impl<'exe> VM<'exe> {
     }
 
     fn call(&mut self, func: &FunctionInfo, arg_size: Size) {
-        let stack_top: Addr = self.stack.top.try_into().expect("[INTERNAL ERR] top of stack cannot fit in a `Size`.");
+        let stack_top: Addr = self
+            .stack
+            .top()
+            .try_into()
+            .expect("[INTERNAL ERR] top of stack cannot fit in a `Size`.");
         let stack_bottom = stack_top - arg_size;
 
         let frame = CallFrame {
-            ip: 0,
-            code: unsafe { std::mem::transmute(func.code.as_ref().unwrap().as_ref()) },
+            reader: ByteReader::new(unsafe {
+                std::mem::transmute(func.code.as_ref().unwrap().as_ref())
+            }),
             stack_bottom,
         };
 
         self.frames.push(frame);
+    }
+
+    fn print_stack(&self, fmt: &[Type]) {
+        let stack = self.stack.get_buffer();
+        let mut reader = ByteReader::new(stack);
+
+        println!("\nFinal State of Stack:");
+        for &typ in fmt {
+            let value_idx = reader.offset();
+
+            match typ {
+                Type::Bool => {
+                    let value: Bool = reader.read();
+                    println!("{:04X}: {:?}", value_idx, value);
+                }
+                Type::Char => {
+                    let value: Char = reader.read();
+                    println!("{:04X}: {:?}", value_idx, value);
+                }
+                Type::Int => {
+                    let value: Int = reader.read();
+                    println!("{:04X}: {:?}", value_idx, value);
+                }
+                Type::Float => {
+                    let value: Float = reader.read();
+                    println!("{:04X}: {:?}", value_idx, value);
+                }
+                Type::String => {
+                    let value: runtime_type::String = reader.read();
+                    let value =
+                        unsafe { std::slice::from_raw_parts(value.chars, value.len as usize) };
+                    let value = std::str::from_utf8(value)
+                        .expect("[INTERNAL ERR] String value in stack not valid UTF-8.");
+                    println!("{:04X}: {:?}", value_idx, value);
+                }
+                Type::Type => todo!(),
+                Type::Composite(idx) => {
+                    let interp = Interpreter::get();
+                    let typ = &interp.types[idx];
+                    match typ {
+                        TypeInfo::Pointer(_) => {
+                            let value: Pointer = reader.read();
+                            println!("{:04X}: {:?}", value_idx, value);
+                        }
+                        TypeInfo::Array(info) => todo!(),
+                        TypeInfo::Record(info) => todo!(),
+                        TypeInfo::Function(info) => todo!(),
+                    }
+                }
+            }
+        }
+
+        while reader.offset() < self.stack.top() {
+            let byte_idx = reader.offset();
+            let byte: u8 = reader.read();
+            println!("{:04X}: {:?}", byte_idx, byte);
+        }
     }
 }

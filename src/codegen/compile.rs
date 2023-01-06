@@ -1,6 +1,6 @@
 use crate::{
-    canon::scoping::{ScopeBinding, ScopeIndex},
-    interp::{Interpreter, ParsedFile},
+    canon::scoping::{ScopeBinding, ScopeIndex, FuncID},
+    interp::{Interpreter, ParsedFile, FunctionInfo},
     ir::{
         annotations::Annotations,
         ast::{
@@ -37,6 +37,11 @@ pub fn compile_executable(files: &mut [ParsedFile]) -> Result<Executable> {
         queued.progress = QueuedProgress::Compiled;
     }
 
+    let global_scope = compiler.func_builders.pop().expect("[INTERNAL ERR] No global scope remaining after compilation.");
+    assert!(compiler.func_builders.is_empty(), "FunctionBuilder's still left over after compilation.");
+
+    global_scope.build_with(&mut compiler.exe);
+
     compiler.exe.build()
 }
 
@@ -49,35 +54,53 @@ fn is_node_compilable(node: &Ast) -> bool {
 
 #[derive(Default)]
 struct FunctionBuilder {
+    func_id: FuncID,
     stack_top: Addr,
     code: Vec<u8>,
 }
 
+impl FunctionBuilder {
+    fn build_with(self, exe: &mut ExecutableBuilder) {
+        let interp = Interpreter::get_mut();
+        let info = &mut interp.funcs[self.func_id.0];
+        info.code = Some(self.code.into_boxed_slice());
+        exe.add_func(info.clone()); // @TEMP: This is just to get stuff working
+    }
+}
+
 struct Compiler {
     exe: ExecutableBuilder,
-    func: FunctionBuilder,
+    func_builders: Vec<FunctionBuilder>,
 }
 
 impl Compiler {
     fn new() -> Self {
         Self {
             exe: ExecutableBuilder::new(),
-            func: Default::default(),
+            func_builders: vec![Default::default()],
         }
     }
 
+    fn current_function_mut(&mut self) -> &mut FunctionBuilder {
+        self.func_builders.last_mut().expect("[INTERNAL ERR] No function builders.")
+    }
+
+    fn current_function(&self) -> &FunctionBuilder {
+        self.func_builders.last().expect("[INTERNAL ERR] No function builders.")
+    }
+
     fn stack_top(&self) -> Addr {
-        self.func.stack_top
+        self.current_function().stack_top
     }
 
     fn set_stack_top(&mut self, new_top: Addr) {
-        self.func.stack_top = new_top;
+        self.current_function_mut().stack_top = new_top;
     }
 }
 
 impl Compiler {
     fn emit_byte(&mut self, byte: u8) {
-        self.func.code.push(byte);
+        self.current_function_mut().code.push(byte);
     }
 
     fn emit_inst(&mut self, inst: Instruction) {

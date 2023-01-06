@@ -422,6 +422,7 @@ impl<'file> Parser<'file> {
     fn parse_prefix(&mut self, token: Token) -> ParseResult {
         match token.info {
             TokenInfo::Ident(_)
+            | TokenInfo::Bool(_)
             | TokenInfo::Int(_)
             | TokenInfo::Float(_)
             | TokenInfo::String(_) => Ok(Ast::new_literal(token)),

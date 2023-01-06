@@ -99,7 +99,7 @@ pub struct VariableBinding {
     pub addr: Addr,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FuncID(pub usize);
 
 #[derive(Debug)]

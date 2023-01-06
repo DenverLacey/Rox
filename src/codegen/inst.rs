@@ -1,6 +1,6 @@
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Instruction {
     NoOp = 0,
 
@@ -93,7 +93,7 @@ pub enum Instruction {
     Jump,
     // Desc:   Jumps the instruction pointer `k` bytes forwards.
     // Schema: (k:u16) [] -> []
-    Loop,
+    JumpBack,
     // Desc:   Jumps the instruction pointer `k` bytes backwards.
     // Scehma: (k:u16) [] -> []
     JumpTrue,
@@ -118,3 +118,5 @@ pub enum Instruction {
     // Desc:   Calls builtin function `f`.
     // Schema: (size:u16, f:Builtin) [args...] -> [return_value?]
 }
+
+

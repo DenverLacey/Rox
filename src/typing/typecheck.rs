@@ -364,6 +364,7 @@ fn typecheck_literal(scope: &mut Scope, token: &Token) -> TypecheckResult {
                 ScopeBinding::Type(_) => Type::Type,
             }
         }
+        TokenInfo::Bool(_) => Type::Bool,
         TokenInfo::Int(_) => Type::Int,
         TokenInfo::Float(_) => Type::Float,
         TokenInfo::String(_) => Type::String,

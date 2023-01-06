@@ -12,5 +12,5 @@ pub fn XXXprint(stack: &mut Stack, arg_size: Size) {
     let value = unsafe { *(data.as_ptr() as *const Int) };
 
     let mut stdout = std::io::stdout();
-    writeln!(stdout, "{}", value);
+    writeln!(stdout, "{}", value).expect("Failed to write to stdout.");
 }

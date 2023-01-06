@@ -50,7 +50,7 @@ pub struct ParsedFile {
     pub ast: Vec<Queued>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FunctionInfo {
     pub id: FuncID,
     pub name: String,
@@ -107,6 +107,10 @@ impl Interpreter {
     }
 
     pub fn execute_executable(&mut self, exe: &Executable) -> Result<()> {
+        if cfg!(debug_assertions) {
+            exe.dump_instructions();
+        }
+
         let mut vm = VM::new(exe);
         vm.execute()
     }
