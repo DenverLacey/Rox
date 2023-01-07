@@ -8,7 +8,7 @@ use debug_print::debug_println as dprintln;
 use crate::{
     canon::{
         resolve_deps::Resolver,
-        scoping::{FuncID, Scope, Scoper},
+        scoping::{FuncID, Scope, Scoper, ScopeBinding},
     },
     codegen::{compile::compile_executable, exe::Executable},
     ir::ast::Queued,
@@ -69,6 +69,33 @@ impl Interpreter {
         }
     }
 
+    fn initialize(&mut self) {
+        self.create_global_scope();
+        self.load_prelude();
+    }
+
+    fn create_global_scope(&mut self) {
+        let typ = self.get_or_create_function_type(TypeInfoFunction { params: Box::new([]), returns: None });
+        let id = self.create_function("<MAIN>", typ);
+        assert_eq!(id.0, 0);
+    }
+
+    fn load_prelude(&mut self) {
+        let mut prelude = Scope::new();
+
+        prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::Bool));
+        prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::Int));
+        prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::Float));
+        prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::String));
+        prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::Type));
+
+        if self.scopes.is_empty() {
+            self.scopes.push(prelude);
+        } else {
+            self.scopes[0] = prelude;
+        }
+    }
+
     pub fn get() -> &'static Self {
         unsafe { &INTERP }
     }
@@ -78,13 +105,15 @@ impl Interpreter {
     }
 
     pub fn generate_executable(&mut self, path: impl AsRef<Path>) -> Result<Executable> {
+        self.initialize();
+
         self.parse_source_code(path)?;
 
         self.establish_scopes()?;
 
         if cfg!(debug_assertions) {
             for f in &self.parsed_files {
-                dprintln!("AST of {:?}:\n{:?}\n", f.filepath, f.ast);
+                dprintln!("AST of {:?}:\n{:#?}\n", f.filepath, f.ast);
             }
 
             for (i, s) in self.scopes.iter().enumerate() {
@@ -108,7 +137,7 @@ impl Interpreter {
 
     pub fn execute_executable(&mut self, exe: &Executable) -> Result<()> {
         if cfg!(debug_assertions) {
-            exe.dump_instructions();
+            exe.print_instructions();
         }
 
         let mut vm = VM::new(exe);
@@ -237,7 +266,6 @@ impl Interpreter {
 
     fn establish_scopes(&mut self) -> Result<()> {
         let mut scoper = Scoper::new(&mut self.scopes);
-        scoper.load_prelude();
 
         for file in &mut self.parsed_files {
             let nodes = file.ast.iter_mut().map(|q| &mut q.node);

@@ -12,17 +12,25 @@ use crate::{
 use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer};
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
-    let mut queued_remaining: usize = files.iter().map(|file| file.ast.len()).sum();
-    while queued_remaining != 0 {
+    loop {
+        let mut all_typechecked = true;
+
         for queued in files.iter_mut().flat_map(|file| file.ast.iter_mut()) {
-            if !queued_ready_for_typecheck(queued) || queued.is_typechecked() {
+            if !queued_ready_for_typecheck(queued) {
+                all_typechecked = false;
+                continue;
+            } else if queued.is_typechecked() {
                 continue;
             }
 
             typecheck_queued(queued)?;
-            if queued.is_typechecked() {
-                queued_remaining -= 1;
+            if !queued.is_typechecked() {
+                all_typechecked = false;
             }
+        }
+
+        if all_typechecked {
+            break;
         }
     }
 
@@ -165,6 +173,7 @@ fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -
     let binding = ScopeBinding::Var(VariableBinding {
         is_mut: info.mutable,
         typ: var_type,
+        is_global: scope.is_global(),
         addr: 0,
     });
     scope.add_binding(
@@ -218,6 +227,7 @@ fn typecheck_fn_signature(scope: &mut Scope, token: &Token, info: &mut AstInfoFn
         let param_binding = ScopeBinding::Var(VariableBinding {
             is_mut: false,
             typ: param_type,
+            is_global: false,
             addr: 0,
         });
 

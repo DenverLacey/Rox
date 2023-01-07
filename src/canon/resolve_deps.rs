@@ -5,8 +5,8 @@ use debug_print::debug_println as dprintln;
 use crate::{
     interp::ParsedFile,
     ir::ast::{
-        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued, QueuedProgress,
-        VariableInitializer,
+        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued,
+        QueuedProgress, VariableInitializer,
     },
     parsing::tokenization::TokenInfo,
     util::errors::{Result, SourceError2},

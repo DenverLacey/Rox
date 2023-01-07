@@ -5,7 +5,7 @@ use crate::{
         annotations::Annotations,
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind,
-            QueuedProgress, VariableInitializer,
+            QueuedProgress, VariableInitializer, Queued,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -28,21 +28,55 @@ use super::{
 pub fn compile_executable(files: &mut [ParsedFile]) -> Result<Executable> {
     let mut compiler = Compiler::new();
 
-    for queued in files
-        .iter_mut()
-        .flat_map(|file| file.ast.iter_mut())
-        .filter(|queued| is_node_compilable(&queued.node))
-    {
-        compiler.compile_node(&queued.node)?;
-        queued.progress = QueuedProgress::Compiled;
+    loop {
+        let mut all_compiled = true;
+
+        for queued in files
+            .iter_mut()
+            .flat_map(|file| file.ast.iter_mut())
+            .filter(|queued| is_node_compilable(&queued.node))
+        {
+            if !queued_ready_for_compile(&queued) {
+                all_compiled = false;
+                continue;
+            } else if queued.is_compiled() {
+                continue;
+            }
+
+            compiler.compile_node(&queued.node)?;
+            queued.progress = QueuedProgress::Compiled;
+        }
+        
+        if all_compiled {
+            break;
+        }
     }
 
     let global_scope = compiler.func_builders.pop().expect("[INTERNAL ERR] No global scope remaining after compilation.");
     assert!(compiler.func_builders.is_empty(), "FunctionBuilder's still left over after compilation.");
 
-    global_scope.build_with(&mut compiler.exe);
+    global_scope.build();
 
     compiler.exe.build()
+}
+
+fn queued_ready_for_compile(queued: &Queued) -> bool {
+    let interp = Interpreter::get();
+
+    let deps = if matches!(queued.node.info, AstInfo::Fn(_)) {
+        &queued.inner_deps
+    } else {
+        &queued.deps
+    };
+
+    for dep in deps {
+        let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
+        if dep.progress < QueuedProgress::Compiled {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn is_node_compilable(node: &Ast) -> bool {
@@ -60,11 +94,10 @@ struct FunctionBuilder {
 }
 
 impl FunctionBuilder {
-    fn build_with(self, exe: &mut ExecutableBuilder) {
+    fn build(self) {
         let interp = Interpreter::get_mut();
         let info = &mut interp.funcs[self.func_id.0];
         info.code = Some(self.code.into_boxed_slice());
-        exe.add_func(info.clone()); // @TEMP: This is just to get stuff working
     }
 }
 
@@ -87,6 +120,22 @@ impl Compiler {
 
     fn current_function(&self) -> &FunctionBuilder {
         self.func_builders.last().expect("[INTERNAL ERR] No function builders.")
+    }
+
+    fn begin_build_function(&mut self, id: FuncID) {
+        let new = FunctionBuilder {
+            func_id: id,
+            ..Default::default()
+        };
+
+        self.func_builders.push(new);
+    }
+
+    fn end_function(&mut self, id: FuncID) {
+        let last = self.func_builders.pop().expect("[INTERNAL ERR] No builder's to end.");
+        assert_eq!(last.func_id, id, "[INTERNAL ERR] Attempted to end a function builder with the wrong ID. {:?} vs. {:?}", last.func_id, id);
+
+        last.build();
     }
 
     fn stack_top(&self) -> Addr {
@@ -222,7 +271,7 @@ impl Compiler {
 
         match binding {
             ScopeBinding::Var(var) => {
-                let global = scope_idx.0 == 0;
+                let global = var.is_global;
                 let size = var.typ.size();
                 let addr = var.addr;
                 self.emit_dup(global, size, addr);
@@ -260,7 +309,40 @@ impl Compiler {
             }
         }
 
-        // todo!();
+        self.begin_build_function(id);
+
+        let AstInfo::Block(AstBlockKind::Params, params) = &info.params.info else {
+            panic!("[INTERNAL ERR] `params` node is not a `Params` node.");
+        };
+
+        for param in params {
+            let scope = &mut interp.scopes[param.scope.0];
+
+            let AstInfo::Binary(AstBinaryKind::Param, ident, _) = &param.info else {
+                panic!("[INTERNAL ERR] `param` node is not a `Param` node.");
+            };
+
+            let TokenInfo::Ident(ident) = &ident.token.info else {
+                panic!("[INTERNAL ERR] `ident` of parameter was not an `Ident` node.");
+            };
+
+            let Some(binding) = scope.find_binding_mut(ident) else {
+                panic!("[INTERNAL ERR] Unresolvable identifier `{}`.", ident);
+            };
+
+            let ScopeBinding::Var(var) = binding else {
+                panic!("[INTERNAL ERR] ident `{}` doesn't bind to a variable but a `{:?}`.", ident, binding);
+            };
+
+            let stack_top = self.stack_top();
+            var.addr = stack_top;
+            
+            self.set_stack_top(stack_top + var.typ.size());
+        }
+
+        self.compile_node(&info.body)?;
+
+        self.end_function(id);
 
         Ok(())
     }
@@ -300,9 +382,9 @@ impl Compiler {
         init_expr: &Ast,
     ) -> Result<()> {
         let interp = Interpreter::get_mut();
-        let scopes = &mut interp.scopes[scope.0];
+        let scope = &mut interp.scopes[scope.0];
 
-        let Some(binding) = scopes.find_binding_mut(ident) else {
+        let Some(binding) = scope.find_binding_mut(ident) else {
             panic!("[INTERNAL ERR] Unresolvable identifier `{}`.", ident);
         };
 

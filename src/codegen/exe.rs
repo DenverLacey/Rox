@@ -1,5 +1,5 @@
 use crate::{
-    interp::FunctionInfo,
+    interp::Interpreter,
     util::{errors::{error, Result}, byte_reader::ByteReader}, typing::value_type::runtime_type::{Char, Int, Float, Pointer}, runtime::{vm::{Size, Addr}, builtins::Builtin},
 };
 
@@ -8,14 +8,14 @@ use super::inst::Instruction;
 pub struct Executable {
     pub constants: Box<[u8]>,
     pub str_constants: Box<[u8]>,
-    pub funcs: Box<[FunctionInfo]>,
+    // pub funcs: Box<[FunctionInfo]>,
     pub entry_point: usize,
 }
 
 pub struct ExecutableBuilder {
     constants: Vec<u8>,
     str_constants: Vec<u8>,
-    funcs: Vec<FunctionInfo>,
+    // funcs: Vec<FunctionInfo>,
     entry_point: Option<usize>,
 }
 
@@ -24,7 +24,7 @@ impl ExecutableBuilder {
         Self {
             constants: Vec::new(),
             str_constants: Vec::new(),
-            funcs: Vec::new(),
+            // funcs: Vec::new(),
             entry_point: None,
         }
     }
@@ -90,10 +90,6 @@ impl ExecutableBuilder {
         idx
     }
 
-    pub fn add_func(&mut self, f: FunctionInfo) {
-        self.funcs.push(f);
-    }
-
     pub fn set_entry_point(&mut self, entry_point: usize) -> bool {
         if self.entry_point.is_some() {
             return false;
@@ -106,12 +102,12 @@ impl ExecutableBuilder {
     pub fn build(self) -> Result<Executable> {
         let constants = self.constants.into_boxed_slice();
         let str_constants = self.str_constants.into_boxed_slice();
-        let funcs = self.funcs.into_boxed_slice();
+        // let funcs = self.funcs.into_boxed_slice();
 
         Ok(Executable {
             constants,
             str_constants,
-            funcs,
+            // funcs,
             entry_point: self
                 .entry_point
                 .ok_or_else(|| error!("No entry point function designated."))?,
@@ -161,11 +157,16 @@ impl ExecutableBuilder {
 }
 
 impl Executable {
-    pub fn dump_instructions(&self) {
-        for func in self.funcs.iter() {
+    pub fn print_instructions(&self) {
+        let interp = Interpreter::get();
+        let funcs = interp.funcs.iter();
+        for func in funcs {
             println!("{}#{:04}: {}", func.name, func.id.0, func.typ);
-            let instructions = func.code.as_ref().expect("[INTERNAL ERR] Cannot dump instructions of function that hasn't been compiled.");
-            print_instructions(&self.constants, &self.str_constants, instructions);
+            if let Some(instructions) = func.code.as_ref() {
+                print_instructions(&self.constants, &self.str_constants, instructions);
+            } else {
+                println!("Not compiled.");
+            }
             println!();
         }
     }

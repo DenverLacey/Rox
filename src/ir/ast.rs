@@ -202,20 +202,11 @@ impl Queued {
         }
     }
 
-    pub fn all_dependencies_typechecked(&self) -> bool {
-        let interp = Interpreter::get();
-
-        for dep in &self.deps {
-            let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
-            if dep.progress < QueuedProgress::PartiallyTypechecked {
-                return false;
-            }
-        }
-
-        true
-    }
-
     pub fn is_typechecked(&self) -> bool {
         self.progress >= QueuedProgress::Typechecked
+    }
+
+    pub fn is_compiled(&self) -> bool {
+        self.progress >= QueuedProgress::Compiled
     }
 }

@@ -33,6 +33,10 @@ impl Scope {
 }
 
 impl Scope {
+    pub fn is_global(&self) -> bool {
+        self.parent.filter(|p| p.0 == 0).is_some()
+    }
+
     pub fn find_binding_mut(&mut self, ident: &str) -> Option<&mut ScopeBinding> {
         if let Some(binding) = self.bindings.get_mut(ident) {
             return Some(binding);
@@ -96,6 +100,7 @@ pub enum ScopeBinding {
 pub struct VariableBinding {
     pub is_mut: bool,
     pub typ: Type,
+    pub is_global: bool,
     pub addr: Addr,
 }
 
@@ -115,22 +120,6 @@ pub struct Scoper<'a> {
 impl<'a> Scoper<'a> {
     pub fn new(scopes: &'a mut Vec<Scope>) -> Self {
         Self { scopes }
-    }
-
-    pub fn load_prelude(&mut self) {
-        let mut prelude = Scope::new();
-
-        prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::Bool));
-        prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::Int));
-        prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::Float));
-        prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::String));
-        prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::Type));
-
-        if self.scopes.is_empty() {
-            self.scopes.push(prelude);
-        } else {
-            self.scopes[0] = prelude;
-        }
     }
 
     pub fn establish_scope_for_file<'iter>(

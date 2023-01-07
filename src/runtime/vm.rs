@@ -141,16 +141,31 @@ impl<'exe> VM<'exe> {
 
     pub fn execute(&mut self) -> Result<()> {
         self.run_global_scope()?;
-        self.print_stack(&[Type::Int, Type::Int, Type::Bool]);
+        if cfg!(debug_assertions) {
+            println!("Stack after global scope run:");
+            self.print_stack(&[Type::Int, Type::Int, Type::Bool, Type::Bool]);
+            println!();
+        }
+
+        self.run_from_entry()?;
+
         Ok(())
     }
 }
 
 impl<'exe> VM<'exe> {
     fn run_global_scope(&mut self) -> Result<()> {
-        assert!(!self.exe.funcs.is_empty(), "No global scope to execute.");
-        let global_scope = &self.exe.funcs[0];
+        let interp = Interpreter::get();
+        assert!(!interp.funcs.is_empty(), "No global scope to execute.");
+        let global_scope = &interp.funcs[0];
         self.call(global_scope, 0);
+        self.run()
+    }
+
+    fn run_from_entry(&mut self) -> Result<()> {
+        let interp = Interpreter::get();
+        let entry = &interp.funcs[self.exe.entry_point];
+        self.call(entry, 0);
         self.run()
     }
 
@@ -329,7 +344,6 @@ impl<'exe> VM<'exe> {
         let stack = self.stack.get_buffer();
         let mut reader = ByteReader::new(stack);
 
-        println!("\nFinal State of Stack:");
         for &typ in fmt {
             let value_idx = reader.offset();
 

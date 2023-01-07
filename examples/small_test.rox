@@ -1,7 +1,9 @@
 let x = 1
 let y = x + 1
-XXXprint y
 let z = true
+let w = !z
 
 %[entry]
-fn main() {}
+fn main() {
+    XXXprint y
+}
