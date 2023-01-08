@@ -88,6 +88,9 @@ pub enum Instruction {
     // Desc:   Moves `size` bytes to the beginning of the current `CallFrame` and returns to the
     //         previous `CallFrame` effectively popping off any arguments left on the stack.
     // Schema: (size:u16) [..., x] -> [x]
+    Ret_0,
+    // Desc:   Returns from a procedure with no return value.
+    // Schema: () [...] -> []
 
     // Branching
     Jump,

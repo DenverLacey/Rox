@@ -388,7 +388,7 @@ impl<'file> Parser<'file> {
         let node = match token.info {
             TokenInfo::XXXPrint => {
                 let token = self.next_token().expect("Already peeked");
-                self.parse_unary(AstUnaryKind::XXXPrint, token)?
+                self.parse_unary_with_precedence(AstUnaryKind::XXXPrint, TokenPrecedence::Assignment, token)?
             }
             _ => self.parse_expression()?,
         };
@@ -438,7 +438,6 @@ impl<'file> Parser<'file> {
             TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token),
             TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
             TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
-            TokenInfo::XXXPrint => self.parse_unary(AstUnaryKind::XXXPrint, token),
             TokenInfo::Fn => self.parse_fn_type_signature(token),
             _ => Err(error!(
                 "Encountered a non-prefix token `{:?}` in prefix position.",
@@ -500,8 +499,12 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_unary(&mut self, kind: AstUnaryKind, token: Token) -> ParseResult {
+        self.parse_unary_with_precedence(kind, TokenPrecedence::Unary, token)
+    }
+
+    fn parse_unary_with_precedence(&mut self, kind: AstUnaryKind, prec: TokenPrecedence, token: Token) -> ParseResult {
         self.skip_newline()?;
-        let sub_expression = self.parse_precedence(TokenPrecedence::Unary)?;
+        let sub_expression = self.parse_precedence(prec)?;
         Ok(Ast::new_unary(kind, token, Box::new(sub_expression)))
     }
 
@@ -579,7 +582,7 @@ impl<'file> Parser<'file> {
             };
 
             let Some(annon) = annotations::TABLE.get(annon.as_str()).copied() else {
-                return Err(SourceError::new("Invalid annotation", tok.loc, format!("`{}` is not an annotation.", annon)).into());
+                return Err(SourceError::new("Invalid annotation", tok.loc, format!("`{}` is not a valid annotation.", annon)).into());
             };
 
             self.current_annotations |= annon;

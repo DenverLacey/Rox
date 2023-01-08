@@ -30,7 +30,7 @@ pub enum AstInfo {
     TypeValue(Type),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AstUnaryKind {
     Neg,
     Not,
@@ -40,7 +40,7 @@ pub enum AstUnaryKind {
     XXXPrint,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AstBinaryKind {
     Add,
     Sub,

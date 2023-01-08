@@ -1,6 +1,6 @@
 use crate::{
     canon::scoping::{ScopeBinding, ScopeIndex, FuncID},
-    interp::{Interpreter, ParsedFile, FunctionInfo},
+    interp::{Interpreter, ParsedFile},
     ir::{
         annotations::Annotations,
         ast::{
@@ -226,6 +226,11 @@ impl Compiler {
         self.emit_value(size);
     }
 
+    fn emit_call(&mut self, size: Size) {
+        self.emit_inst(Instruction::Call);
+        self.emit_value(size);
+    }
+
     fn emit_call_builtin(&mut self, size: Size, builtin: Builtin) {
         self.emit_inst(Instruction::CallBuiltin);
         self.emit_value(size);
@@ -236,9 +241,9 @@ impl Compiler {
 impl Compiler {
     fn compile_node(&mut self, node: &Ast) -> Result<()> {
         match &node.info {
-            AstInfo::Literal => self.compile_literal(node.scope, &node.token),
-            AstInfo::Unary(kind, expr) => self.compile_unary(*kind, expr),
-            AstInfo::Binary(kind, lhs, rhs) => self.compile_binary(*kind, lhs, rhs),
+            AstInfo::Literal => self.compile_literal(node.scope, &node.token, node.typ),
+            AstInfo::Unary(kind, expr) => self.compile_unary(*kind, node.typ, expr),
+            AstInfo::Binary(kind, lhs, rhs) => self.compile_binary(*kind, node.typ, lhs, rhs),
             AstInfo::Block(kind, nodes) => self.compile_block(*kind, nodes),
             AstInfo::Fn(info) => self.compile_fn_decl(&node.token, info),
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
@@ -248,7 +253,9 @@ impl Compiler {
         }
     }
 
-    fn compile_literal(&mut self, scope: ScopeIndex, token: &Token) -> Result<()> {
+    fn compile_literal(&mut self, scope: ScopeIndex, token: &Token, typ: Option<Type>) -> Result<()> {
+        let stack_top = self.stack_top();
+
         match &token.info {
             TokenInfo::Ident(ident) => self.compile_ident(scope, ident)?,
             TokenInfo::Bool(value) => self.emit_bool(*value),
@@ -258,10 +265,15 @@ impl Compiler {
             _ => panic!("Invalid literal token info `{:?}`", token.info),
         }
 
+        let size = typ.map_or(0, |t| t.size());
+        self.set_stack_top(stack_top + size);
+
         Ok(())
     }
 
     fn compile_ident(&mut self, scope_idx: ScopeIndex, ident: &str) -> Result<()> {
+        let stack_top = self.stack_top();
+
         let interp = Interpreter::get();
         let scope = &interp.scopes[scope_idx.0];
 
@@ -269,10 +281,11 @@ impl Compiler {
             panic!("[INTERNAL ERR] Unresolvable identifier `{}`.", ident);
         };
 
+        let size: Size;
         match binding {
             ScopeBinding::Var(var) => {
                 let global = var.is_global;
-                let size = var.typ.size();
+                size = var.typ.size();
                 let addr = var.addr;
                 self.emit_dup(global, size, addr);
             }
@@ -280,11 +293,15 @@ impl Compiler {
                 let fn_ref = &interp.funcs[func.id.0];
                 let fn_ptr = fn_ref as *const _ as *const ();
                 self.emit_ptr(fn_ptr);
+
+                size = std::mem::size_of::<Pointer>().try_into().expect("[INTERNAL ERR] Size of `Pointer` doesn't fit in a `Size`.");
             }
             ScopeBinding::Type(typ) => {
                 todo!()
             }
         }
+
+        self.set_stack_top(stack_top + size);
 
         Ok(())
     }
@@ -341,6 +358,10 @@ impl Compiler {
         }
 
         self.compile_node(&info.body)?;
+
+        // @TODO:
+        // Do not emit superfluous return instructions.
+        self.emit_inst(Instruction::Ret_0);
 
         self.end_function(id);
 
@@ -403,23 +424,23 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_unary(&mut self, kind: AstUnaryKind, expr: &Ast) -> Result<()> {
+    fn compile_unary(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {
         match kind {
             AstUnaryKind::Neg | AstUnaryKind::Not | AstUnaryKind::XXXPrint => {
-                self.compile_unary_typical(kind, expr)
+                self.compile_unary_typical(kind, typ, expr)
             }
             AstUnaryKind::Ref | AstUnaryKind::RefMut => todo!(),
             AstUnaryKind::Deref => todo!(),
         }
     }
 
-    fn compile_unary_typical(&mut self, kind: AstUnaryKind, expr: &Ast) -> Result<()> {
+    fn compile_unary_typical(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {
         let stack_top = self.stack_top();
-        let typ = expr.typ.unwrap();
+        let expr_type = expr.typ.unwrap();
 
         self.compile_node(expr)?;
 
-        match (typ, kind) {
+        match (expr_type, kind) {
             (Type::Int, AstUnaryKind::Neg) => self.emit_inst(Instruction::Int_Neg),
             (Type::Float, AstUnaryKind::Neg) => self.emit_inst(Instruction::Float_Neg),
 
@@ -432,31 +453,31 @@ impl Compiler {
 
             _ => panic!(
                 "[INTERNAL ERR] Invalid combination of type and unary kind (`{:?}`, `{:?}`).",
-                typ, kind
+                expr_type, kind
             ),
         }
 
-        let size = typ.size();
+        let size = typ.map_or(0, |t| t.size());
         self.set_stack_top(stack_top + size);
 
         Ok(())
     }
 
-    fn compile_binary(&mut self, kind: AstBinaryKind, lhs: &Ast, rhs: &Ast) -> Result<()> {
+    fn compile_binary(&mut self, kind: AstBinaryKind, typ: Option<Type>, lhs: &Ast, rhs: &Ast) -> Result<()> {
         match kind {
             AstBinaryKind::Add
             | AstBinaryKind::Sub
             | AstBinaryKind::Mul
             | AstBinaryKind::Div
-            | AstBinaryKind::Mod => self.compile_binary_typical(kind, lhs, rhs),
+            | AstBinaryKind::Mod => self.compile_binary_typical(kind, typ, lhs, rhs),
             AstBinaryKind::Assign => todo!(),
-            AstBinaryKind::Call => todo!(),
+            AstBinaryKind::Call => self.compile_call(typ, lhs, rhs),
             AstBinaryKind::Subscript => todo!(),
-            AstBinaryKind::Param => todo!(),
+            AstBinaryKind::Param => panic!("[INTERNAL ERR] `Param` node not being handled by `compile_fn_decl()`."),
         }
     }
 
-    fn compile_binary_typical(&mut self, kind: AstBinaryKind, lhs: &Ast, rhs: &Ast) -> Result<()> {
+    fn compile_binary_typical(&mut self, kind: AstBinaryKind, typ: Option<Type>, lhs: &Ast, rhs: &Ast) -> Result<()> {
         let stack_top = self.stack_top();
         let lhs_type = lhs.typ.unwrap();
         let rhs_type = rhs.typ.unwrap();
@@ -479,10 +500,25 @@ impl Compiler {
             _ => panic!("[INTERNAL ERR] Unhandled combination of type and binary kind (`{:?}`, `{:?}`, `{:?}`).", lhs_type, kind, rhs_type),
         }
 
-        // @NOTE:
-        // Using the lhs_type's size might not always be correct when we add other operations.
-        let size = lhs_type.size();
+        let size = typ.map_or(0, |t| t.size());
         self.set_stack_top(stack_top + size);
+
+        Ok(())
+    }
+
+    fn compile_call(&mut self, typ: Option<Type>, callee: &Ast, args: &Ast) -> Result<()> {
+        let stack_top_before_args = self.stack_top();
+
+        self.compile_node(args)?;
+
+        let stack_top_after_args = self.stack_top();
+        let arg_size = stack_top_after_args - stack_top_before_args;
+
+        self.compile_node(callee)?;
+        self.emit_call(arg_size);
+
+        let size = typ.map_or(0, |t| t.size());
+        self.set_stack_top(stack_top_before_args + size);
 
         Ok(())
     }
@@ -496,7 +532,9 @@ impl Compiler {
 
         if kind == AstBlockKind::Block {
             let size = self.stack_top() - stack_top;
-            self.emit_pop(size);
+            if size != 0 {
+                self.emit_pop(size);
+            }
         }
 
         Ok(())

@@ -334,6 +334,10 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Ret {}b", inst_idx, size * 8);
             }
+            Ret_0 => println!("{:04X}: {:?}", inst_idx, inst),
         }
     }
+
+    let len = reader.offset();
+    println!("{:04X}: END", len);
 }

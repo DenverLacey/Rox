@@ -54,6 +54,11 @@ impl Stack {
             .expect("Bad access to stack")
     }
 
+    pub fn flush(&self, new_top: Addr) {
+        let me = unsafe { &mut *self.inner.get() };
+        me.top = new_top as usize;
+    }
+
     pub fn push(&self, data: &[u8]) {
         let me = unsafe { &mut *self.inner.get() };
 
@@ -143,7 +148,7 @@ impl<'exe> VM<'exe> {
         self.run_global_scope()?;
         if cfg!(debug_assertions) {
             println!("Stack after global scope run:");
-            self.print_stack(&[Type::Int, Type::Int, Type::Bool, Type::Bool]);
+            self.print_stack(&[Type::Int, Type::Int]);
             println!();
         }
 
@@ -308,13 +313,24 @@ impl<'exe> VM<'exe> {
                 JumpFalseNoPop => todo!(),
 
                 // Invocation
-                Call => todo!(),
+                Call => {
+                    let size: Size = frame.reader.read();
+                    let f: &FunctionInfo = self.stack.pop_value();
+                    self.call(&*f, size);
+                    frame = self.frames.last_mut().expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
+                }
                 CallBuiltin => {
                     let size: Size = frame.reader.read();
                     let f: Builtin = frame.reader.read();
                     f(&mut self.stack, size);
                 }
+                Ret_0 => {
+                    let reset_point = frame.stack_bottom;
+                    self.stack.flush(reset_point);
 
+                    self.frames.pop();
+                    frame = self.frames.last_mut().expect("[INTERNAL ERR] No other frame to return to.");
+                }
                 Ret => todo!(),
             }
         }

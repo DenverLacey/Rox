@@ -1,9 +1,13 @@
-let x = 1
+
 let y = x + 1
-let z = true
-let w = !z
+let x = foo(6)
 
 %[entry]
 fn main() {
-    XXXprint y
+    foo(y)
 }
+
+fn foo(k: Int) {
+    XXXprint k + x
+}
+
