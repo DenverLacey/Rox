@@ -1,10 +1,12 @@
 
 let y = x + 1
-let x = foo(6)
+let x = 1 # foo(6)
 
 %[entry]
 fn main() {
     foo(y)
+    XXXprint "I wanna rox and roll!"
+    XXXprint "I wanna rox and roll!"
 }
 
 fn foo(k: Int) {

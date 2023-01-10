@@ -220,7 +220,15 @@ impl<'exe> VM<'exe> {
                         .expect("[INTERNAL ERR] Bad constant!!!");
                     self.stack.push(constant);
                 }
-                PushConst_Str => todo!(),
+                PushConst_Str => {
+                    let idx: usize = frame.reader.read();
+
+                    let len = unsafe { *std::mem::transmute::<&u8, &i64>(&self.exe.str_constants[idx]) };
+                    let chars = (&self.exe.str_constants[idx + std::mem::size_of::<i64>()]) as *const u8;
+                    let s = runtime_type::String { len, chars };
+
+                    self.stack.push_value(s);
+                }
 
                 // Arithmetic
                 Int_Add => bin_op!(Int, Int, Int, +, self),

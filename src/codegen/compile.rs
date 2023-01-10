@@ -122,7 +122,7 @@ impl Compiler {
         self.func_builders.last().expect("[INTERNAL ERR] No function builders.")
     }
 
-    fn begin_build_function(&mut self, id: FuncID) {
+    fn begin_building_function(&mut self, id: FuncID) {
         let new = FunctionBuilder {
             func_id: id,
             ..Default::default()
@@ -131,11 +131,11 @@ impl Compiler {
         self.func_builders.push(new);
     }
 
-    fn end_function(&mut self, id: FuncID) {
-        let last = self.func_builders.pop().expect("[INTERNAL ERR] No builder's to end.");
-        assert_eq!(last.func_id, id, "[INTERNAL ERR] Attempted to end a function builder with the wrong ID. {:?} vs. {:?}", last.func_id, id);
+    fn finish_building_function(&mut self, id: FuncID) {
+        let finished = self.func_builders.pop().expect("[INTERNAL ERR] No builder's to end.");
+        assert_eq!(finished.func_id, id, "[INTERNAL ERR] Attempted to end a function builder with the wrong ID. {:?} vs. {:?}", finished.func_id, id);
 
-        last.build();
+        finished.build();
     }
 
     fn stack_top(&self) -> Addr {
@@ -210,6 +210,11 @@ impl Compiler {
         self.emit_value(value);
     }
 
+    fn emit_push_const_str(&mut self, idx: usize) {
+        self.emit_inst(Instruction::PushConst_Str);
+        self.emit_value(idx);
+    }
+
     fn emit_dup(&mut self, global: bool, size: Size, addr: Addr) {
         if global {
             self.emit_inst(Instruction::DupGlobal);
@@ -261,7 +266,10 @@ impl Compiler {
             TokenInfo::Bool(value) => self.emit_bool(*value),
             TokenInfo::Int(value) => self.emit_int(*value),
             TokenInfo::Float(value) => self.emit_float(*value),
-            TokenInfo::String(value) => todo!(),
+            TokenInfo::String(value) => {
+                let constant_idx = self.exe.add_str_constant(value.as_bytes());
+                self.emit_push_const_str(constant_idx);
+            }
             _ => panic!("Invalid literal token info `{:?}`", token.info),
         }
 
@@ -326,7 +334,7 @@ impl Compiler {
             }
         }
 
-        self.begin_build_function(id);
+        self.begin_building_function(id);
 
         let AstInfo::Block(AstBlockKind::Params, params) = &info.params.info else {
             panic!("[INTERNAL ERR] `params` node is not a `Params` node.");
@@ -363,7 +371,7 @@ impl Compiler {
         // Do not emit superfluous return instructions.
         self.emit_inst(Instruction::Ret_0);
 
-        self.end_function(id);
+        self.finish_building_function(id);
 
         Ok(())
     }
@@ -447,9 +455,22 @@ impl Compiler {
             (Type::Bool, AstUnaryKind::Not) => self.emit_inst(Instruction::Not),
             (Type::Int, AstUnaryKind::Not) => self.emit_inst(Instruction::Bit_Not),
 
-            (Type::Int, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::Int.size(), builtins::XXXprint)
+            (Type::Bool, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(Type::Bool.size(), builtins::XXXprint_Bool)
             }
+            (Type::Char, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(Type::Char.size(), builtins::XXXprint_Char)
+            }
+            (Type::Int, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(Type::Int.size(), builtins::XXXprint_Int)
+            }
+            (Type::Float, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(Type::Float.size(), builtins::XXXprint_Float)
+            }
+            (Type::String, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(Type::String.size(), builtins::XXXprint_String)
+            }
+
 
             _ => panic!(
                 "[INTERNAL ERR] Invalid combination of type and unary kind (`{:?}`, `{:?}`).",
@@ -506,7 +527,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_call(&mut self, typ: Option<Type>, callee: &Ast, args: &Ast) -> Result<()> {
+    fn compile_call(&mut self, return_type: Option<Type>, callee: &Ast, args: &Ast) -> Result<()> {
         let stack_top_before_args = self.stack_top();
 
         self.compile_node(args)?;
@@ -517,7 +538,7 @@ impl Compiler {
         self.compile_node(callee)?;
         self.emit_call(arg_size);
 
-        let size = typ.map_or(0, |t| t.size());
+        let size = return_type.map_or(0, |t| t.size());
         self.set_stack_top(stack_top_before_args + size);
 
         Ok(())

@@ -151,6 +151,6 @@ pub mod runtime_type {
     #[derive(Clone, Copy)]
     pub struct String {
         pub len: Int,
-        pub chars: *mut u8,
+        pub chars: *const u8,
     }
 }

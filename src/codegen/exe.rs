@@ -77,10 +77,14 @@ impl ExecutableBuilder {
 
         let idx = self.str_constants.len();
 
-        for shift in 0..std::mem::size_of_val(&slice.len()) {
-            let len = slice.len();
-            let byte = (0xFF & (len >> shift)) as u8;
-            self.str_constants.push(byte);
+        unsafe {
+            let mut p = &slice.len() as *const usize as *const u8;
+            for _ in 0..std::mem::size_of_val(&slice.len()) {
+                let byte = *p;
+                self.str_constants.push(byte);
+
+                p = p.add(1);
+            }
         }
 
         for byte in slice {
@@ -124,7 +128,7 @@ impl ExecutableBuilder {
             };
 
             let idx = i;
-            let len = Self::extract_usize(len_bytes);
+            let len = unsafe { *(len_bytes.as_ptr() as *const usize) };
             i += len_bytes.len();
 
             let bytes = self
@@ -139,20 +143,6 @@ impl ExecutableBuilder {
         }
 
         None
-    }
-
-    fn extract_usize(bytes: &[u8]) -> usize {
-        assert!(bytes.len() == 8);
-
-        let mut result = 0;
-
-        for i in 0..std::mem::size_of::<usize>() {
-            let byte = bytes[i];
-            let shifted = (byte as usize) << i;
-            result |= shifted;
-        }
-
-        result
     }
 }
 
@@ -212,7 +202,17 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let constant = constants.get(idx..(idx + size as usize * 8)).expect("[INTERNAL ERR] Bad constant!!!");
                 println!("{:04X}: PushConst [{}] {}b {:?}", inst_idx, idx, size * 8, constant);
             }
-            PushConst_Str => todo!(),
+            PushConst_Str => {
+                let idx: usize = reader.read();
+
+                let len = unsafe { *std::mem::transmute::<&u8, &usize>(&str_constants[idx]) };
+                let chars = (&str_constants[idx + std::mem::size_of::<i64>()]) as *const u8;
+
+                let slice = unsafe { std::slice::from_raw_parts(chars, len) };
+                let constant = unsafe { std::str::from_utf8_unchecked(slice) };
+
+                println!("{:04X}: PushConst_Str [{}] {:?}", inst_idx, idx, constant);
+            }
 
             // Arithmetic
             Int_Add |
