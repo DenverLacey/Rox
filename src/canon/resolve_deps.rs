@@ -272,9 +272,10 @@ impl<'files> Resolver<'files> {
     fn detect_circular_dependencies_for_queued(&self, queued_loc: Dependency) -> Result<()> {
         let queued = &self.files[queued_loc.parsed_file_idx].ast[queued_loc.queued_idx];
         let deps = &queued.deps;
+        let mut seen = vec![];
 
         for &dep in deps {
-            self.detect_circular_dependency(queued_loc, dep, dep)?;
+            self.detect_circular_dependency(queued_loc, dep, dep, &mut seen)?;
         }
 
         Ok(())
@@ -285,24 +286,30 @@ impl<'files> Resolver<'files> {
         needle: Dependency,
         parent_dep: Dependency,
         dep: Dependency,
+        seen: &mut Vec<Dependency>,
     ) -> Result<()> {
         if needle == dep {
             let err = self.generate_dependency_error(needle, parent_dep);
             return Err(err.into());
         }
 
+        let recurse = !seen.contains(&dep);
+        seen.push(dep);
+
         let needle_node = &self.files[needle.parsed_file_idx].ast[needle.queued_idx];
         let dep = &self.files[dep.parsed_file_idx].ast[dep.queued_idx];
         let deps = &dep.deps;
         let inner_deps = &dep.inner_deps;
 
-        for &child_dep in deps {
-            self.detect_circular_dependency(needle, parent_dep, child_dep)?;
-        }
+        if recurse {
+            for &child_dep in deps {
+                self.detect_circular_dependency(needle, parent_dep, child_dep, seen)?;
+            }
 
-        if !matches!(needle_node.node.info, AstInfo::Fn(_)) {
-            for &child_dep in inner_deps {
-                self.detect_circular_dependency(needle, parent_dep, child_dep)?;
+            if !matches!(needle_node.node.info, AstInfo::Fn(_)) {
+                for &child_dep in inner_deps {
+                    self.detect_circular_dependency(needle, parent_dep, child_dep, seen)?;
+                }
             }
         }
 

@@ -1,6 +1,6 @@
 
 let y = x + 1
-let x = 1 # foo(6)
+let x = 1
 
 %[entry]
 fn main() {
@@ -18,10 +18,10 @@ fn foo(k: Int) {
 fn bar() {
     let x, y = 5
     XXXprint x * y
-}
-
+} 
+ 
 fn baz() {
     let a, b = 'A', 'B'
     XXXprint a
     XXXprint b
-}
+} 

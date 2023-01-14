@@ -1,5 +1,3 @@
-use std::hash::Hasher;
-
 use bitflags::bitflags;
 use phf::phf_map;
 

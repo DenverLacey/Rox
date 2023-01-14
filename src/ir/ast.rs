@@ -2,7 +2,6 @@ use std::fmt::Debug;
 
 use crate::{
     canon::scoping::{FuncID, ScopeIndex},
-    interp::Interpreter,
     parsing::tokenization::Token,
     typing::value_type::Type,
 };
@@ -60,7 +59,6 @@ pub enum AstBlockKind {
     Comma,
     Params,
     Args,
-    VarDeclTargets,
 }
 
 #[derive(Debug)]
