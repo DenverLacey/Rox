@@ -1,11 +1,11 @@
 use crate::{
-    canon::scoping::{FuncID, ScopeBinding, ScopeIndex, Scope},
+    canon::scoping::{FuncID, Scope, ScopeBinding, ScopeIndex},
     interp::{Interpreter, ParsedFile},
     ir::{
         annotations::Annotations,
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
-            QueuedProgress, 
+            QueuedProgress,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -286,6 +286,7 @@ impl Compiler {
         match &token.info {
             TokenInfo::Ident(ident) => self.compile_ident(scope, ident)?,
             TokenInfo::Bool(value) => self.emit_bool(*value),
+            TokenInfo::Char(value) => self.emit_char(*value),
             TokenInfo::Int(value) => self.emit_int(*value),
             TokenInfo::Float(value) => self.emit_float(*value),
             TokenInfo::String(value) => {
@@ -413,17 +414,28 @@ impl Compiler {
         }
     }
 
-    fn compile_var_decl_no_initializer(&mut self, scope: ScopeIndex, targets: &[Ast]) -> Result<()> {
+    fn compile_var_decl_no_initializer(
+        &mut self,
+        scope: ScopeIndex,
+        targets: &[Ast],
+    ) -> Result<()> {
         todo!()
     }
 
-    fn compile_var_decl_one_initalizer(&mut self, scope: ScopeIndex, targets: &[Ast], init: &Ast) -> Result<()> {
+    fn compile_var_decl_one_initalizer(
+        &mut self,
+        scope: ScopeIndex,
+        targets: &[Ast],
+        init: &Ast,
+    ) -> Result<()> {
         let interp = Interpreter::get_mut();
         let scope = &mut interp.scopes[scope.0];
         let is_global_scope = scope.is_global();
 
         let stack_top = self.stack_top();
-        let typ = init.typ.expect("[INTERNAL ERR] variable initalizer doesn't have a type.");
+        let typ = init
+            .typ
+            .expect("[INTERNAL ERR] variable initalizer doesn't have a type.");
 
         self.compile_node(init)?;
         for _ in 1..targets.len() {
@@ -431,7 +443,9 @@ impl Compiler {
         }
 
         for (i, target) in targets.iter().enumerate() {
-            let i: Size = i.try_into().expect("[INTERNAL ERR] Too many targets to fit in a `Size`.");
+            let i: Size = i
+                .try_into()
+                .expect("[INTERNAL ERR] Too many targets to fit in a `Size`.");
 
             let ident = match &target.info {
                 AstInfo::Literal => match &target.token.info {
@@ -445,7 +459,7 @@ impl Compiler {
                 _ => panic!("[INTERNAL ERR] target node in `Var` node is not an `Ident` node or a `ConstrainedVarDeclTarget` node."),
             };
 
-            self.bind_variable_address(stack_top + i * typ.size(), scope, ident, typ);
+            self.bind_variable_address(stack_top + i * typ.size(), scope, ident);
         }
 
         self.set_stack_top(stack_top + targets.len() as Size * typ.size());
@@ -453,11 +467,49 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_var_decl_many_initializers(&mut self, scope: ScopeIndex, targets: &[Ast], inits: &[Ast]) -> Result<()> {
-        todo!()
+    fn compile_var_decl_many_initializers(
+        &mut self,
+        scope: ScopeIndex,
+        targets: &[Ast],
+        inits: &[Ast],
+    ) -> Result<()> {
+        let interp = Interpreter::get_mut();
+        let scope = &mut interp.scopes[scope.0];
+
+        assert_eq!(
+            targets.len(),
+            inits.len(),
+            "[INTERNAL ERR] Incorrect number of targets for number of initalizer expressions."
+        );
+        for (target, init) in targets.iter().zip(inits) {
+            let stack_top = self.stack_top();
+            let typ = init
+                .typ
+                .expect("[INTERNAL ERR] init expression doesn't have a type.");
+
+            let ident = match &target.info {
+                AstInfo::Literal => match &target.token.info {
+                    TokenInfo::Ident(ident) => ident,
+                    _ => panic!("[INTERNAL ERR] target node in `Var` node is a `Literal` but not an `Ident`."),
+                },
+                AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, _) => match &ident.token.info {
+                    TokenInfo::Ident(ident) => ident,
+                    _ => panic!("[INTERNAL ERR] target node in `Var` node is a `ConstrainedVarDeclTarget` node where the lhs is not an `Ident` node."),
+                },
+                _ => panic!("[INTERNAL ERR] target node in `Var` node is not an `Ident` node or a `ConstrainedVarDeclTarget` node."),
+            };
+
+            self.bind_variable_address(stack_top, scope, ident);
+
+            self.compile_node(init)?;
+
+            self.set_stack_top(stack_top + typ.size());
+        }
+
+        Ok(())
     }
 
-    fn bind_variable_address(&mut self, addr: Addr, scope: &mut Scope, ident: &str, typ: Type) {
+    fn bind_variable_address(&mut self, addr: Addr, scope: &mut Scope, ident: &str) {
         let Some(binding) = scope.find_binding_mut(ident) else {
             panic!("[INTERNAL ERR] Unresolvable identifier `{}`.", ident);
         };
@@ -467,9 +519,6 @@ impl Compiler {
         };
 
         var.addr = addr;
-
-        let size = typ.size();
-        self.set_stack_top(addr + size);
     }
 
     fn compile_unary(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {

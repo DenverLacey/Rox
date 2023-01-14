@@ -5,7 +5,9 @@ use debug_print::debug_println as dprintln;
 use crate::{
     interp::ParsedFile,
     ir::ast::{
-        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued, QueuedProgress, AstBinaryKind},
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued,
+        QueuedProgress,
+    },
     parsing::tokenization::TokenInfo,
     util::errors::{Result, SourceError2},
 };
@@ -162,10 +164,17 @@ impl<'files> Resolver<'files> {
             AstInfo::Var(info) => {
                 let deps = &mut node.deps;
 
-                Self::resolve_dependencies_for_nodes(current_scope, deps, info.targets.iter().filter(|t| {
-                    let info = &t.info;
-                    matches!(info, AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _))
-                }));
+                Self::resolve_dependencies_for_nodes(
+                    current_scope,
+                    deps,
+                    info.targets.iter().filter(|t| {
+                        let info = &t.info;
+                        matches!(
+                            info,
+                            AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _)
+                        )
+                    }),
+                );
                 Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             }
 
@@ -218,12 +227,19 @@ impl<'files> Resolver<'files> {
             }
             AstInfo::Fn(info) => todo!(),
             AstInfo::Var(info) => {
-                Self::resolve_dependencies_for_nodes(current_scope, deps, info.targets.iter().filter(|t| {
-                    let info = &t.info;
-                    matches!(info, AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _))
-                }));
+                Self::resolve_dependencies_for_nodes(
+                    current_scope,
+                    deps,
+                    info.targets.iter().filter(|t| {
+                        let info = &t.info;
+                        matches!(
+                            info,
+                            AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _)
+                        )
+                    }),
+                );
                 Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
-            },
+            }
             AstInfo::Import(info) => todo!(),
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(sig) => match sig.as_ref() {

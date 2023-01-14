@@ -3,7 +3,7 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Queued, QueuedProgress, 
+        AstUnaryKind, Queued, QueuedProgress,
     },
     parsing::tokenization::{Token, TokenInfo},
     util::errors::{Result, SourceError, SourceError2},
@@ -100,12 +100,25 @@ fn typecheck_var_decl(scope: &mut Scope, info: &mut AstInfoVar) -> Result<()> {
 
     match info.initializers.as_mut_slice() {
         [] => typecheck_var_decl_no_initializer(interp, scope, info.mutable, &mut info.targets),
-        [init] => typecheck_var_decl_one_initializer(interp, scope, info.mutable, &mut info.targets, init),
-        inits => typecheck_var_decl_many_initializers(interp, scope, info.mutable, &mut info.targets, inits),
+        [init] => {
+            typecheck_var_decl_one_initializer(interp, scope, info.mutable, &mut info.targets, init)
+        }
+        inits => typecheck_var_decl_many_initializers(
+            interp,
+            scope,
+            info.mutable,
+            &mut info.targets,
+            inits,
+        ),
     }
 }
 
-fn typecheck_var_decl_no_initializer(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast]) -> Result<()> {
+fn typecheck_var_decl_no_initializer(
+    interp: &mut Interpreter,
+    scope: &mut Scope,
+    mutable: bool,
+    targets: &mut [Ast],
+) -> Result<()> {
     for target in targets {
         let AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, type_constraint) = &mut target.info else {
             panic!("[INTERNAL ERR] target in `Var` node with no initializers is not a `ConstrainedVarDeclTarget` node.");
@@ -137,7 +150,12 @@ fn typecheck_var_decl_no_initializer(interp: &mut Interpreter, scope: &mut Scope
     Ok(())
 }
 
-fn typecheck_variable_for_binding(scope: &mut Scope, mutable: bool, target: &mut Ast, init_type: Type) -> Result<()> {
+fn typecheck_variable_for_binding(
+    scope: &mut Scope,
+    mutable: bool,
+    target: &mut Ast,
+    init_type: Type,
+) -> Result<()> {
     match &mut target.info {
         AstInfo::Literal => {
             let Token { loc: target_loc, info: TokenInfo::Ident(ident) } = &target.token else {
@@ -160,13 +178,21 @@ fn typecheck_variable_for_binding(scope: &mut Scope, mutable: bool, target: &mut
         AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, type_constraint) => {
             todo!()
         }
-        _ => panic!("[INTERNAL ERR] target node is not an `Ident` or `ConstrainedVarDeclTarget` node."),
+        _ => panic!(
+            "[INTERNAL ERR] target node is not an `Ident` or `ConstrainedVarDeclTarget` node."
+        ),
     }
 
     Ok(())
 }
 
-fn typecheck_var_decl_one_initializer(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast], init: &mut Ast) -> Result<()> {
+fn typecheck_var_decl_one_initializer(
+    interp: &mut Interpreter,
+    scope: &mut Scope,
+    mutable: bool,
+    targets: &mut [Ast],
+    init: &mut Ast,
+) -> Result<()> {
     typecheck_node(interp, init)?;
     let Some(init_type) = init.typ else {
         return Err(SourceError::new("Variable initializer has no type.", init.token.loc, "Cannot initialize a variable with typeless expression.").into());
@@ -179,9 +205,19 @@ fn typecheck_var_decl_one_initializer(interp: &mut Interpreter, scope: &mut Scop
     Ok(())
 }
 
-fn typecheck_var_decl_many_initializers(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast], inits: &mut [Ast]) -> Result<()> {
-    assert_eq!(targets.len(), inits.len(), "[INTERNAL ERR] number of targets and initializers aren't equal.");
-    for (target, init) in targets.iter_mut().zip(inits.iter_mut()) {
+fn typecheck_var_decl_many_initializers(
+    interp: &mut Interpreter,
+    scope: &mut Scope,
+    mutable: bool,
+    targets: &mut [Ast],
+    inits: &mut [Ast],
+) -> Result<()> {
+    assert_eq!(
+        targets.len(),
+        inits.len(),
+        "[INTERNAL ERR] number of targets and initializers aren't equal."
+    );
+    for (target, init) in targets.iter_mut().zip(inits) {
         typecheck_node(interp, init)?;
         let Some(init_type) = init.typ else {
             return Err(SourceError::new("Variable initializer has no type.", init.token.loc, "Cannot initialize a variable with typeless expression.").into());
@@ -382,6 +418,7 @@ fn typecheck_literal(scope: &mut Scope, token: &Token) -> TypecheckResult {
             }
         }
         TokenInfo::Bool(_) => Type::Bool,
+        TokenInfo::Char(_) => Type::Char,
         TokenInfo::Int(_) => Type::Int,
         TokenInfo::Float(_) => Type::Float,
         TokenInfo::String(_) => Type::String,

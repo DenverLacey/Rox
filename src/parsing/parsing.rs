@@ -6,7 +6,7 @@ use crate::{
         annotations::{self, Annotations},
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport,
-            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, 
+            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -246,16 +246,18 @@ impl<'file> Parser<'file> {
 
         let mut targets = vec![self.parse_expression()?];
         while self.next_token_if_eq(TokenInfoTag::Comma)?.is_some() {
-            let ident_tok = self.expect_token(
-                TokenInfoTag::Ident,
-                "Expected an identifier.",
-            )?;
+            let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
             let ident = Ast::new_literal(ident_tok);
 
             if self.check_token(TokenInfoTag::Colon)? {
                 let colon_tok = self.next_token().expect("Already peeked.");
                 let type_constraint = self.parse_expression()?;
-                let target = Ast::new_binary(AstBinaryKind::ConstrainedVarDeclTarget, colon_tok, Box::new(ident), Box::new(type_constraint));
+                let target = Ast::new_binary(
+                    AstBinaryKind::ConstrainedVarDeclTarget,
+                    colon_tok,
+                    Box::new(ident),
+                    Box::new(type_constraint),
+                );
                 targets.push(target);
             } else {
                 targets.push(ident);
@@ -414,6 +416,7 @@ impl<'file> Parser<'file> {
         match token.info {
             TokenInfo::Ident(_)
             | TokenInfo::Bool(_)
+            | TokenInfo::Char(_)
             | TokenInfo::Int(_)
             | TokenInfo::Float(_)
             | TokenInfo::String(_) => Ok(Ast::new_literal(token)),

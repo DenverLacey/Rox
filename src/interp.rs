@@ -88,6 +88,7 @@ impl Interpreter {
         let mut prelude = Scope::new();
 
         prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::Bool));
+        prelude.add_binding_unchecked("Char", ScopeBinding::Type(Type::Char));
         prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::Int));
         prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::Float));
         prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::String));

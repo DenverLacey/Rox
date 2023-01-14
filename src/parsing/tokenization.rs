@@ -50,6 +50,7 @@ pub enum TokenInfo {
     // Literals
     Ident(String), // @IMPROVE: This could probably be a &str with some lifetime
     Bool(bool),
+    Char(char),
     Int(i64),
     Float(f64),
     String(String), // @IMPOVE: ^^
@@ -91,6 +92,7 @@ impl TokenInfo {
             TokenInfo::End => TokenPrecedence::None,
             TokenInfo::Ident(_) => TokenPrecedence::None,
             TokenInfo::Bool(_) => TokenPrecedence::None,
+            TokenInfo::Char(_) => TokenPrecedence::None,
             TokenInfo::Int(_) => TokenPrecedence::None,
             TokenInfo::Float(_) => TokenPrecedence::None,
             TokenInfo::String(_) => TokenPrecedence::None,
@@ -127,6 +129,7 @@ impl Display for TokenInfo {
             TokenInfo::End => write!(f, "EOF"),
             TokenInfo::Ident(_) => write!(f, "identifier"),
             TokenInfo::Bool(_) => write!(f, "Bool"),
+            TokenInfo::Char(_) => write!(f, "Char"),
             TokenInfo::Int(_) => write!(f, "Int"),
             TokenInfo::Float(_) => write!(f, "Float"),
             TokenInfo::String(_) => write!(f, "String"),
@@ -316,7 +319,8 @@ impl<'file> Tokenizer<'file> {
 
         let c = self.peek_char();
         let token = match c {
-            '"' => self.tokenize_string()?,
+            '\'' => self.tokenize_text_literal(true)?,
+            '"' => self.tokenize_text_literal(false)?,
             _ if c.is_ascii_digit() => self.tokenize_number()?,
             _ if Self::is_ident_begin(c) => self.tokenize_identifier_or_keyword(),
             _ => self.tokenize_punctuation()?,
@@ -350,17 +354,19 @@ impl<'file> Tokenizer<'file> {
         }
     }
 
-    fn tokenize_string(&mut self) -> Result<Token> {
+    fn tokenize_text_literal(&mut self, is_char: bool) -> Result<Token> {
+        let delimeter = if is_char { '\'' } else { '"' };
+
         let span_start = self.cur_offset;
 
         let dbl_quote = self.next_char();
         assert!(
-            dbl_quote == '"',
+            dbl_quote == delimeter,
             "[INTERNAL ERR] `tokenize_string` didn't find first `\"`."
         );
 
         let mut word = String::new();
-        while self.peek_char() != '"' && self.peek_char() != '\0' {
+        while self.peek_char() != delimeter && self.peek_char() != '\0' {
             let c = self.next_char();
             match c {
                 '\n' => {
@@ -376,19 +382,42 @@ impl<'file> Tokenizer<'file> {
             }
         }
 
-        if !self.match_char('"') {
+        if !self.match_char(delimeter) {
+            let err = if is_char {
+                SourceError::new(
+                    "Unterminated char literal.",
+                    CodeLocation::new(self.loaded_file_idx, (span_start, word.len())),
+                    "This is where the char literal starts.",
+                )
+            } else {
+                SourceError::new(
+                    "Unterminated string literal.",
+                    CodeLocation::new(self.loaded_file_idx, (span_start, word.len())),
+                    "This is where the string literal starts.",
+                )
+            };
+
+            return Err(err.into());
+        }
+
+        let loc = self.create_location((span_start, word.len()));
+
+        if is_char && word.len() != 1 {
             return Err(SourceError::new(
-                "Unterminated string literal.",
-                CodeLocation::new(self.loaded_file_idx, (span_start, word.len())),
-                "This is where the string literal starts.",
+                "Too many chaaracters in `Char` literal.",
+                loc,
+                "Character literals can only contain one character.",
             )
             .into());
         }
 
-        Ok(Token::new(
-            self.create_location((span_start, word.len())),
-            TokenInfo::String(word),
-        ))
+        let tok = if is_char {
+            Token::new(loc, TokenInfo::Char(word.chars().next().expect("[INTERNAL ERR] Character literal expected to be guarenteed a length of 1 at this point.")))
+        } else {
+            Token::new(loc, TokenInfo::String(word))
+        };
+
+        Ok(tok)
     }
 
     fn tokenize_number(&mut self) -> Result<Token> {
