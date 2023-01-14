@@ -293,7 +293,7 @@ impl<'files> Resolver<'files> {
             return Err(err.into());
         }
 
-        let recurse = !seen.contains(&dep);
+        let is_children_not_seen = !seen.contains(&dep);
         seen.push(dep);
 
         let needle_node = &self.files[needle.parsed_file_idx].ast[needle.queued_idx];
@@ -301,7 +301,7 @@ impl<'files> Resolver<'files> {
         let deps = &dep.deps;
         let inner_deps = &dep.inner_deps;
 
-        if recurse {
+        if is_children_not_seen {
             for &child_dep in deps {
                 self.detect_circular_dependency(needle, parent_dep, child_dep, seen)?;
             }

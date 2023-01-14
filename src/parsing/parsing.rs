@@ -244,8 +244,9 @@ impl<'file> Parser<'file> {
             "Expected variable declaration to begin with either a `let` or `mut` keyword."
         );
 
-        let mut targets = vec![self.parse_expression()?];
-        while self.next_token_if_eq(TokenInfoTag::Comma)?.is_some() {
+        let mut initializers_required = false;
+        let mut targets = vec![];
+        loop {
             let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
             let ident = Ast::new_literal(ident_tok);
 
@@ -261,7 +262,12 @@ impl<'file> Parser<'file> {
                 targets.push(target);
             } else {
                 targets.push(ident);
+                initializers_required = true;
             }
+
+            if self.next_token_if_eq(TokenInfoTag::Comma)?.is_none() {
+                break;
+            } 
         }
 
         let initializers = if self.match_token(TokenInfoTag::Equal)? {
@@ -286,7 +292,7 @@ impl<'file> Parser<'file> {
 
         let num_targets = targets.len();
         let num_exprs = initializers.len();
-        if (num_exprs == 0 && num_targets != 1) || (num_exprs != num_targets) && num_exprs != 1 {
+        if initializers_required && ((num_exprs == 0 && num_targets != 1) || (num_exprs != num_targets) && num_exprs != 1) {
             // @TODO: Improve error message
             return Err(SourceError::new("Incorrect number of targets for number of expressions.", var_tok.loc, "This variable declaration has incorrect number of targets for the number of expressions.").into());
         }

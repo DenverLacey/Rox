@@ -248,6 +248,16 @@ impl Compiler {
         self.emit_value(size);
     }
 
+    fn emit_alloc(&mut self, size: Size) {
+        self.emit_inst(Instruction::Alloc);
+        self.emit_value(size);
+    }
+
+    fn emit_allocz(&mut self, size: Size) {
+        self.emit_inst(Instruction::AllocZ);
+        self.emit_value(size);
+    }
+
     fn emit_call(&mut self, size: Size) {
         self.emit_inst(Instruction::Call);
         self.emit_value(size);
@@ -419,7 +429,33 @@ impl Compiler {
         scope: ScopeIndex,
         targets: &[Ast],
     ) -> Result<()> {
-        todo!()
+        let interp = Interpreter::get_mut();
+        let scope = &mut interp.scopes[scope.0];
+
+        let stack_top = self.stack_top();
+        let mut total_size: Size = 0;
+
+        for target in targets {
+            let AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, typ) = &target.info else {
+                panic!("[INTERNAL ERR] target node is not a `ConstrainedVarDeclTarget` node.");
+            };
+
+            let TokenInfo::Ident(ident) = &ident.token.info else {
+                panic!("[INTERNAL ERR] `ident` node of `ConstrainedVarDeclTarget` node not an `Ident` node.");
+            };
+
+            let AstInfo::TypeValue(typ) = typ.info else {
+                panic!("[INTERNAL ERR] `typ` node of `ConstrainedVarDeclTarget` node not a type.");
+            };
+
+            self.bind_variable_address(stack_top + total_size, scope, ident);
+            total_size += typ.size();
+        }
+
+        self.emit_allocz(total_size);
+        self.set_stack_top(stack_top + total_size);
+
+        Ok(())
     }
 
     fn compile_var_decl_one_initalizer(

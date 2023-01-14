@@ -9,6 +9,7 @@ fn main() {
     XXXprint "I wanna rox and roll!"
     bar()
     baz()
+    biz()
 }
 
 fn foo(k: Int) {
@@ -25,3 +26,10 @@ fn baz() {
     XXXprint a
     XXXprint b
 } 
+
+fn biz() {
+    let int: Int, bool: Bool, float: Float
+    XXXprint int
+    XXXprint bool
+    XXXprint float
+}

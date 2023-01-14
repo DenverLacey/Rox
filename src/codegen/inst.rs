@@ -84,6 +84,13 @@ pub enum Instruction {
     Pop,
     // Desc:   Pops `size` bytes off the stack.
     // Schema: (size:u16) [x] -> []
+    Alloc,
+    // Desc:   Allocates `size` bytes on the stack and leaves it unitialized (if this area of the
+    //         stack has never been used it'll be zero.)
+    // Schema: (size:u16) [] -> [B1, B2, ..., Bsize]
+    AllocZ,
+    // Desc:   Allocates `size` bytes on the stack and zero initializes.
+    // Schema: (size:u16) [] -> [0, 0, ..., 0]
     Ret,
     // Desc:   Moves `size` bytes to the beginning of the current `CallFrame` and returns to the
     //         previous `CallFrame` effectively popping off any arguments left on the stack.
