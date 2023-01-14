@@ -3,11 +3,12 @@ use std::cell::UnsafeCell;
 use crate::{
     codegen::{exe::Executable, inst::Instruction},
     interp::{FunctionInfo, Interpreter},
+    runtime::builtins::Builtin,
     typing::value_type::{
         runtime_type::{self, Bool, Char, Float, Int, Pointer},
         Type, TypeInfo,
     },
-    util::{byte_reader::ByteReader, errors::Result}, runtime::builtins::Builtin,
+    util::{byte_reader::ByteReader, errors::Result},
 };
 
 const STACK_SIZE: usize = std::u16::MAX as usize;
@@ -85,7 +86,7 @@ impl Stack {
         data
     }
 
-    fn push_value<T>(&self, value: T)
+    pub fn push_value<T>(&self, value: T)
     where
         T: Copy + Sized,
     {
@@ -95,14 +96,27 @@ impl Stack {
         self.push(data);
     }
 
-    fn pop_value<T>(&self) -> T
+    pub fn pop_value<T>(&self) -> T
     where
         T: Copy + Sized,
     {
         let size = std::mem::size_of::<T>();
-        let size = size.try_into().expect("sizeof T cannot fit into a `Size`.");
+        let size = size
+            .try_into()
+            .expect("[INTERAL ERR] sizeof T cannot fit into a `Size`.");
         let data = self.pop(size);
         let ptr = data.as_ptr() as *const T;
+        unsafe { *ptr }
+    }
+
+    pub fn top_value<T>(&self) -> T
+    where
+        T: Copy + Sized,
+    {
+        let size = std::mem::size_of::<T>();
+        let me = unsafe { &*self.inner.get() };
+        let data = &me.buffer[me.top - size];
+        let ptr = data as *const u8 as *const T;
         unsafe { *ptr }
     }
 }
@@ -223,8 +237,10 @@ impl<'exe> VM<'exe> {
                 PushConst_Str => {
                     let idx: usize = frame.reader.read();
 
-                    let len = unsafe { *std::mem::transmute::<&u8, &i64>(&self.exe.str_constants[idx]) };
-                    let chars = (&self.exe.str_constants[idx + std::mem::size_of::<i64>()]) as *const u8;
+                    let len =
+                        unsafe { *std::mem::transmute::<&u8, &i64>(&self.exe.str_constants[idx]) };
+                    let chars =
+                        (&self.exe.str_constants[idx + std::mem::size_of::<i64>()]) as *const u8;
                     let s = runtime_type::String { len, chars };
 
                     self.stack.push_value(s);
@@ -276,14 +292,14 @@ impl<'exe> VM<'exe> {
                 }
                 Str_Eq => todo!(),
                 Str_Ne => todo!(),
-                Int_Lt => todo!(),
-                Int_Le => todo!(),
-                Int_Gt => todo!(),
-                Int_Ge => todo!(),
-                Float_Lt => todo!(),
-                Float_Le => todo!(),
-                Float_Gt => todo!(),
-                Float_Ge => todo!(),
+                Int_Lt => bin_op!(Int, Int, Bool, <, self),
+                Int_Le => bin_op!(Int, Int, Bool, <=, self),
+                Int_Gt => bin_op!(Int, Int, Bool, >, self),
+                Int_Ge => bin_op!(Int, Int, Bool, >=, self),
+                Float_Lt => bin_op!(Float, Float, Bool, <, self),
+                Float_Le => bin_op!(Float, Float, Bool, <=, self),
+                Float_Gt => bin_op!(Float, Float, Bool, >, self),
+                Float_Ge => bin_op!(Float, Float, Bool, >=, self),
 
                 // Stack Operations
                 Move => todo!(),
@@ -315,29 +331,63 @@ impl<'exe> VM<'exe> {
                     let jump: Addr = frame.reader.read();
                     frame.reader.jump_back(jump as usize);
                 }
-                JumpTrue => todo!(),
-                JumpFalse => todo!(),
-                JumpTrueNoPop => todo!(),
-                JumpFalseNoPop => todo!(),
+                JumpTrue => {
+                    let jump: Addr = frame.reader.read();
+                    let cond: Bool = self.stack.pop_value();
+
+                    if cond {
+                        frame.reader.jump(jump as usize);
+                    }
+                }
+                JumpFalse => {
+                    let jump: Addr = frame.reader.read();
+                    let cond: Bool = self.stack.pop_value();
+
+                    if !cond {
+                        frame.reader.jump(jump as usize);
+                    }
+                }
+                JumpTrueNoPop => {
+                    let jump: Addr = frame.reader.read();
+                    let cond: Bool = self.stack.top_value();
+
+                    if cond {
+                        frame.reader.jump(jump as usize);
+                    }
+                }
+                JumpFalseNoPop => {
+                    let jump: Addr = frame.reader.read();
+                    let cond: Bool = self.stack.top_value();
+
+                    if !cond {
+                        frame.reader.jump(jump as usize);
+                    }
+                }
 
                 // Invocation
                 Call => {
                     let size: Size = frame.reader.read();
                     let f: &FunctionInfo = self.stack.pop_value();
                     self.call(&*f, size);
-                    frame = self.frames.last_mut().expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
+                    frame = self
+                        .frames
+                        .last_mut()
+                        .expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
                 }
                 CallBuiltin => {
                     let size: Size = frame.reader.read();
-                    let f: Builtin = frame.reader.read();
-                    f(&mut self.stack, size);
+                    let builtin: Builtin = frame.reader.read();
+                    builtin(&mut self.stack, size);
                 }
                 Ret_0 => {
                     let reset_point = frame.stack_bottom;
                     self.stack.flush(reset_point);
 
                     self.frames.pop();
-                    frame = self.frames.last_mut().expect("[INTERNAL ERR] No other frame to return to.");
+                    frame = self
+                        .frames
+                        .last_mut()
+                        .expect("[INTERNAL ERR] No other frame to return to.");
                 }
                 Ret => todo!(),
             }

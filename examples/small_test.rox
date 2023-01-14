@@ -7,9 +7,14 @@ fn main() {
     foo(y)
     XXXprint "I wanna rox and roll!"
     XXXprint "I wanna rox and roll!"
+    bar()
 }
 
 fn foo(k: Int) {
     XXXprint k + x
 }
 
+fn bar() {
+    let x, y = 5
+    XXXprint x * y
+}

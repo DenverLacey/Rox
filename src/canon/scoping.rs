@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     interp::Interpreter,
-    ir::ast::{Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, VariableInitializer},
+    ir::ast::{Ast, AstBlockKind, AstInfo, AstInfoTypeSignature},
     parsing::tokenization::CodeLocation,
     runtime::vm::Addr,
     typing::value_type::Type,
@@ -182,30 +182,8 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }
             AstInfo::Var(info) => {
-                info.targets.scope = current_scope;
-
-                match &mut info.targets.info {
-                    AstInfo::Literal => {}
-                    AstInfo::Block(AstBlockKind::VarDeclTargets, targets) => {
-                        for target in targets {
-                            target.scope = current_scope;
-                        }
-                    }
-                    _ => panic!("[INTERNAL ERR] Targets node of Var Decl node is not a Literal ident or a VarDeclTargets node."),
-                }
-
-                match &mut info.initializer {
-                    VariableInitializer::TypeAndExpr(typ, expr) => {
-                        self.establish_scope_for_node(current_scope, typ)?;
-                        self.establish_scope_for_node(current_scope, expr)?;
-                    }
-                    VariableInitializer::Type(typ) => {
-                        self.establish_scope_for_node(current_scope, typ)?
-                    }
-                    VariableInitializer::Expr(expr) => {
-                        self.establish_scope_for_node(current_scope, expr)?
-                    }
-                }
+                self.establish_scope_for_nodes(current_scope, info.targets.iter_mut())?;
+                self.establish_scope_for_nodes(current_scope, info.initializers.iter_mut())?;
             }
             AstInfo::Import(info) => {
                 self.establish_scope_for_node(current_scope, &mut info.path)?;

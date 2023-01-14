@@ -8,18 +8,19 @@ use debug_print::debug_println as dprintln;
 use crate::{
     canon::{
         resolve_deps::Resolver,
-        scoping::{FuncID, Scope, Scoper, ScopeBinding},
+        scoping::{FuncID, Scope, ScopeBinding, Scoper},
     },
     codegen::{compile::compile_executable, exe::Executable},
     ir::ast::Queued,
     parsing::parsing::parse_file,
+    runtime::vm::VM,
     typing::{
         typecheck::typecheck_program,
         value_type::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
         },
     },
-    util::errors::{error, Result}, runtime::vm::VM,
+    util::errors::{error, Result},
 };
 
 static mut INTERP: Interpreter = Interpreter::new();
@@ -75,7 +76,10 @@ impl Interpreter {
     }
 
     fn create_global_scope(&mut self) {
-        let typ = self.get_or_create_function_type(TypeInfoFunction { params: Box::new([]), returns: None });
+        let typ = self.get_or_create_function_type(TypeInfoFunction {
+            params: Box::new([]),
+            returns: None,
+        });
         let id = self.create_function("<MAIN>", typ);
         assert_eq!(id.0, 0);
     }

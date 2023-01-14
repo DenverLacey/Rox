@@ -1,6 +1,14 @@
 use crate::{
     interp::Interpreter,
-    util::{errors::{error, Result}, byte_reader::ByteReader}, typing::value_type::runtime_type::{Char, Int, Float, Pointer}, runtime::{vm::{Size, Addr}, builtins::Builtin},
+    runtime::{
+        builtins::Builtin,
+        vm::{Addr, Size},
+    },
+    typing::value_type::runtime_type::{Char, Float, Int, Pointer},
+    util::{
+        byte_reader::ByteReader,
+        errors::{error, Result},
+    },
 };
 
 use super::inst::Instruction;
@@ -174,10 +182,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             NoOp => println!("{:04X}: NoOp", inst_idx),
 
             // Literals
-            Lit_True |
-            Lit_False |
-            Lit_0 |
-            Lit_1 => println!("{:04X}: {:?}", inst_idx, inst),
+            Lit_True | Lit_False | Lit_0 | Lit_1 => println!("{:04X}: {:?}", inst_idx, inst),
             Lit_Char => {
                 let c: Char = reader.read();
                 println!("{:04X}: Lit_Char '{}'", inst_idx, c);
@@ -199,8 +204,16 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             PushConst => {
                 let size: Size = reader.read();
                 let idx: usize = reader.read();
-                let constant = constants.get(idx..(idx + size as usize * 8)).expect("[INTERNAL ERR] Bad constant!!!");
-                println!("{:04X}: PushConst [{}] {}b {:?}", inst_idx, idx, size * 8, constant);
+                let constant = constants
+                    .get(idx..(idx + size as usize * 8))
+                    .expect("[INTERNAL ERR] Bad constant!!!");
+                println!(
+                    "{:04X}: PushConst [{}] {}b {:?}",
+                    inst_idx,
+                    idx,
+                    size * 8,
+                    constant
+                );
             }
             PushConst_Str => {
                 let idx: usize = reader.read();
@@ -215,33 +228,21 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             }
 
             // Arithmetic
-            Int_Add |
-            Int_Sub |
-            Int_Mul |
-            Int_Div |
-            Int_Neg |
-            Int_Mod |
-            Int_Inc |
-            Int_Dec => println!("{:04X}: {:?}", inst_idx, inst),
+            Int_Add | Int_Sub | Int_Mul | Int_Div | Int_Neg | Int_Mod | Int_Inc | Int_Dec => {
+                println!("{:04X}: {:?}", inst_idx, inst)
+            }
 
-            Float_Add |
-            Float_Sub |
-            Float_Mul |
-            Float_Div |
-            Float_Neg => println!("{:04X}: {:?}", inst_idx, inst),
+            Float_Add | Float_Sub | Float_Mul | Float_Div | Float_Neg => {
+                println!("{:04X}: {:?}", inst_idx, inst)
+            }
 
             // Bitwise
-            Bit_Not |
-            Bit_Shl |
-            Bit_Shr |
-            Bit_And |
-            Bit_Or  |
-            Bit_Xor => println!("{:04X}: {:?}", inst_idx, inst),
+            Bit_Not | Bit_Shl | Bit_Shr | Bit_And | Bit_Or | Bit_Xor => {
+                println!("{:04X}: {:?}", inst_idx, inst)
+            }
 
             // Logic
-            And |
-            Or |
-            Not => println!("{:04X}: {:?}", inst_idx, inst),
+            And | Or | Not => println!("{:04X}: {:?}", inst_idx, inst),
 
             // Comparison
             Eq => {
@@ -252,16 +253,8 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Ne {}b", inst_idx, size * 8);
             }
-            Str_Eq |
-            Str_Ne |
-            Int_Lt |
-            Int_Le |
-            Int_Gt |
-            Int_Ge |
-            Float_Lt |
-            Float_Le |
-            Float_Gt |
-            Float_Ge => println!("{:04X}: {:?}", inst_idx, inst),
+            Str_Eq | Str_Ne | Int_Lt | Int_Le | Int_Gt | Int_Ge | Float_Lt | Float_Le
+            | Float_Gt | Float_Ge => println!("{:04X}: {:?}", inst_idx, inst),
 
             // Stack Operations
             Move => {
@@ -296,27 +289,51 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             // Branching
             Jump => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: Jump => {:04x}", inst_idx, reader.offset() + jump as usize);
+                println!(
+                    "{:04X}: Jump => {:04x}",
+                    inst_idx,
+                    reader.offset() + jump as usize
+                );
             }
             JumpBack => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: Loop => {:04x}", inst_idx, reader.offset() - jump as usize);
+                println!(
+                    "{:04X}: Loop => {:04x}",
+                    inst_idx,
+                    reader.offset() - jump as usize
+                );
             }
             JumpTrue => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: JumpTrue => {:04x}", inst_idx, reader.offset() + jump as usize);
+                println!(
+                    "{:04X}: JumpTrue => {:04x}",
+                    inst_idx,
+                    reader.offset() + jump as usize
+                );
             }
             JumpFalse => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: JumpFalse => {:04x}", inst_idx, reader.offset() + jump as usize);
+                println!(
+                    "{:04X}: JumpFalse => {:04x}",
+                    inst_idx,
+                    reader.offset() + jump as usize
+                );
             }
             JumpTrueNoPop => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: JumpTrueNoPop => {:04x}", inst_idx, reader.offset() + jump as usize);
+                println!(
+                    "{:04X}: JumpTrueNoPop => {:04x}",
+                    inst_idx,
+                    reader.offset() + jump as usize
+                );
             }
             JumpFalseNoPop => {
                 let jump: Addr = reader.read();
-                println!("{:04X}: JumpFalseNoPop => {:04x}", inst_idx, reader.offset() + jump as usize);
+                println!(
+                    "{:04X}: JumpFalseNoPop => {:04x}",
+                    inst_idx,
+                    reader.offset() + jump as usize
+                );
             }
 
             // Invocation
@@ -327,7 +344,12 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             CallBuiltin => {
                 let size: Size = reader.read();
                 let builtin: Builtin = reader.read();
-                println!("{:04X}: CallBuiltin {}b {:?}", inst_idx, size * 8, builtin as *const ());
+                println!(
+                    "{:04X}: CallBuiltin {}b {:?}",
+                    inst_idx,
+                    size * 8,
+                    builtin as *const ()
+                );
             }
 
             Ret => {

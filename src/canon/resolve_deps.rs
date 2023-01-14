@@ -5,9 +5,7 @@ use debug_print::debug_println as dprintln;
 use crate::{
     interp::ParsedFile,
     ir::ast::{
-        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued,
-        QueuedProgress, VariableInitializer,
-    },
+        Ast, AstBlockKind, AstInfo, AstInfoTypeSignature, Dependency, Queued, QueuedProgress, AstBinaryKind},
     parsing::tokenization::TokenInfo,
     util::errors::{Result, SourceError2},
 };
@@ -84,30 +82,30 @@ impl<'files> Resolver<'files> {
                         });
                     }
                     AstInfo::Var(info) => {
-                        if matches!(info.targets.info, AstInfo::Literal) {
-                            let TokenInfo::Ident(ident) = &info.targets.token.info else {
-                                panic!("[INTERNAL ERR] `targets` node of `Var` node notan `Ident` node but some other `Literal`.");
-                            };
+                        for target in &info.targets {
+                            match &target.info {
+                                AstInfo::Literal => {
+                                    let TokenInfo::Ident(ident) = &target.token.info else {
+                                        panic!("[INTERNAL ERR] `targets` node of `Var` node notan `Ident` node but some other `Literal`.");
+                                    };
 
-                            globals.push(Global {
-                                name: ident.clone(),
-                                queued_idx: idx,
-                            });
-                        } else if let AstInfo::Block(AstBlockKind::VarDeclTargets, targets) =
-                            &info.targets.info
-                        {
-                            for target in targets {
-                                let TokenInfo::Ident(ident) = &target.token.info else {
-                                    panic!("[INTERNAL ERR] One of the targets of a `VarDeclTargets` node is not an `Ident` node.");
-                                };
+                                    globals.push(Global {
+                                        name: ident.clone(),
+                                        queued_idx: idx,
+                                    });
+                                }
+                                AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, _) => {
+                                    let TokenInfo::Ident(ident) = &ident.token.info else {
+                                        panic!("[INTERNAL ERR] `targets` node of `Var` node notan `Ident` node but some other `Literal`.");
+                                    };
 
-                                globals.push(Global {
-                                    name: ident.clone(),
-                                    queued_idx: idx,
-                                });
+                                    globals.push(Global {
+                                        name: ident.clone(),
+                                        queued_idx: idx,
+                                    });
+                                }
+                                _ => panic!("[INTERNAL ERR] target node in `Var` node not a `Literal` or `ConstrainedVarDeclTarget` node."),
                             }
-                        } else {
-                            panic!("[INTERNAL ERR] `targets` node of `Var` node not an `Ident` node or a `VarDeclTargets` node.");
                         }
                     }
 
@@ -164,18 +162,11 @@ impl<'files> Resolver<'files> {
             AstInfo::Var(info) => {
                 let deps = &mut node.deps;
 
-                match &info.initializer {
-                    VariableInitializer::TypeAndExpr(typ, expr) => {
-                        Self::resolve_dependencies_for_node(current_scope, deps, typ);
-                        Self::resolve_dependencies_for_node(current_scope, deps, expr);
-                    }
-                    VariableInitializer::Type(typ) => {
-                        Self::resolve_dependencies_for_node(current_scope, deps, typ);
-                    }
-                    VariableInitializer::Expr(expr) => {
-                        Self::resolve_dependencies_for_node(current_scope, deps, expr);
-                    }
-                }
+                Self::resolve_dependencies_for_nodes(current_scope, deps, info.targets.iter().filter(|t| {
+                    let info = &t.info;
+                    matches!(info, AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _))
+                }));
+                Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             }
 
             AstInfo::Literal => {}
@@ -190,10 +181,10 @@ impl<'files> Resolver<'files> {
         node.progress = QueuedProgress::DependenciesFound;
     }
 
-    fn resolve_dependencies_for_nodes(
+    fn resolve_dependencies_for_nodes<'nodes>(
         current_scope: &mut Scope,
         deps: &mut Vec<Dependency>,
-        nodes: &[Ast],
+        nodes: impl IntoIterator<Item = &'nodes Ast>,
     ) {
         for node in nodes {
             Self::resolve_dependencies_for_node(current_scope, deps, node);
@@ -216,25 +207,22 @@ impl<'files> Resolver<'files> {
             AstInfo::Unary(_, sub_expr) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, sub_expr)
             }
-            AstInfo::Binary(_, lhs, rhs) => {
-                Self::resolve_dependencies_for_node(current_scope, deps, lhs);
+            AstInfo::Binary(kind, lhs, rhs) => {
+                if *kind != AstBinaryKind::ConstrainedVarDeclTarget {
+                    Self::resolve_dependencies_for_node(current_scope, deps, lhs);
+                }
                 Self::resolve_dependencies_for_node(current_scope, deps, rhs);
             }
             AstInfo::Block(_, nodes) => {
                 Self::resolve_dependencies_for_nodes(current_scope, deps, nodes)
             }
             AstInfo::Fn(info) => todo!(),
-            AstInfo::Var(info) => match &info.initializer {
-                VariableInitializer::TypeAndExpr(typ, expr) => {
-                    Self::resolve_dependencies_for_node(current_scope, deps, typ);
-                    Self::resolve_dependencies_for_node(current_scope, deps, expr);
-                }
-                VariableInitializer::Type(typ) => {
-                    Self::resolve_dependencies_for_node(current_scope, deps, typ);
-                }
-                VariableInitializer::Expr(expr) => {
-                    Self::resolve_dependencies_for_node(current_scope, deps, expr);
-                }
+            AstInfo::Var(info) => {
+                Self::resolve_dependencies_for_nodes(current_scope, deps, info.targets.iter().filter(|t| {
+                    let info = &t.info;
+                    matches!(info, AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, _, _))
+                }));
+                Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             },
             AstInfo::Import(info) => todo!(),
             AstInfo::TypeValue(_) => unreachable!(),

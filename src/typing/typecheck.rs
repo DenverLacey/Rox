@@ -3,7 +3,7 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Queued, QueuedProgress, VariableInitializer,
+        AstUnaryKind, Queued, QueuedProgress, 
     },
     parsing::tokenization::{Token, TokenInfo},
     util::errors::{Result, SourceError, SourceError2},
@@ -64,7 +64,7 @@ fn typecheck_queued(queued: &mut Queued) -> Result<()> {
     match &mut queued.node.info {
         AstInfo::Var(info) => {
             let scope = &mut interp.scopes[queued.node.scope.0];
-            typecheck_var_decl(scope, &queued.node.token, info)?;
+            typecheck_var_decl(scope, info)?;
             queued.progress = QueuedProgress::Typechecked;
         }
         AstInfo::Fn(info) => {
@@ -95,93 +95,100 @@ fn typecheck_queued(queued: &mut Queued) -> Result<()> {
     Ok(())
 }
 
-fn typecheck_var_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoVar) -> Result<()> {
+fn typecheck_var_decl(scope: &mut Scope, info: &mut AstInfoVar) -> Result<()> {
     let interp = Interpreter::get_mut();
 
-    assert!(
-        matches!(info.targets.info, AstInfo::Literal),
-        "We don't support multiple var decl targets yet."
-    );
+    match info.initializers.as_mut_slice() {
+        [] => typecheck_var_decl_no_initializer(interp, scope, info.mutable, &mut info.targets),
+        [init] => typecheck_var_decl_one_initializer(interp, scope, info.mutable, &mut info.targets, init),
+        inits => typecheck_var_decl_many_initializers(interp, scope, info.mutable, &mut info.targets, inits),
+    }
+}
 
-    let TokenInfo::Ident(ident) = &info.targets.token.info else {
-        panic!("[INTERNAL ERR] `targets` node in var decl is a `Literal` node but not an `Ident` node.");
-    };
+fn typecheck_var_decl_no_initializer(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast]) -> Result<()> {
+    for target in targets {
+        let AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, type_constraint) = &mut target.info else {
+            panic!("[INTERNAL ERR] target in `Var` node with no initializers is not a `ConstrainedVarDeclTarget` node.");
+        };
 
-    let var_type: Type;
-    match &mut info.initializer {
-        VariableInitializer::TypeAndExpr(typ, expr) => {
-            typecheck_node(interp, typ)?;
-            if !matches!(typ.typ, Some(Type::Type)) {
-                return Err(SourceError::new(
-                    "Specified type in variable declaration was not a type.",
-                    typ.token.loc,
-                    "This was expected to be a type signature.",
-                )
-                .into());
-            }
+        let Token { loc: target_loc, info: TokenInfo::Ident(ident) } = &ident.token else {
+            panic!("[INTERNAL ERR] lhs node of `ConstrainedVarDeclTarget` is not an `Ident` node.");
+        };
 
-            typecheck_node(interp, expr)?;
+        typecheck_node(interp, type_constraint)?;
+        let AstInfo::TypeValue(type_constraint) = type_constraint.info else {
+            return Err(SourceError::new("Type constraint expression is not a type.", type_constraint.token.loc, "This is not a type.").into());
+        };
 
-            let AstInfo::TypeValue(typ_value) = typ.info else {
-                unreachable!();
-            };
-
-            let Some(expr_type) = expr.typ else {
-                panic!("[INTERNAL ERR] `expr` node in var decl doesn't have a type.");
-            };
-
-            if expr_type != typ_value {
-                return Err(SourceError2::new(
-                    "Specified type and type of initializer don't match.",
-                    typ.token.loc,
-                    "Specified type is here.",
-                    expr.token.loc,
-                    format!("This expression has type `{}`.", expr_type),
-                )
-                .into());
-            }
-
-            var_type = typ_value;
-        }
-        VariableInitializer::Type(typ) => {
-            typecheck_node(interp, typ)?;
-            if !matches!(typ.typ, Some(Type::Type)) {
-                return Err(SourceError::new(
-                    "Specified type in variable declaration was not a type.",
-                    typ.token.loc,
-                    "This is not a type.",
-                )
-                .into());
-            }
-
-            let AstInfo::TypeValue(typ_value) = typ.info else {
-                panic!("Specified type node in var decl did not have a `TypeValue` info.");
-            };
-
-            var_type = typ_value;
-        }
-        VariableInitializer::Expr(expr) => {
-            typecheck_node(interp, expr)?;
-            let Some(expr_type) = expr.typ else {
-                panic!("[INTERNAL ERR] `expr` node in var decl doesn't have a type.");
-            };
-
-            var_type = expr_type;
-        }
+        let binding = ScopeBinding::Var(VariableBinding {
+            is_mut: mutable,
+            typ: type_constraint,
+            is_global: scope.is_global(),
+            addr: 0,
+        });
+        scope.add_binding(
+            ident.clone(),
+            binding,
+            *target_loc,
+            format!("Redeclaration of `{}`", ident), // @TODO: Improve error
+        )?;
     }
 
-    let binding = ScopeBinding::Var(VariableBinding {
-        is_mut: info.mutable,
-        typ: var_type,
-        is_global: scope.is_global(),
-        addr: 0,
-    });
-    scope.add_binding(
-        ident.clone(),
-        binding,
-        token.loc,
-        format!("Redeclaration of `{}`", ident), // @TODO: Improve error
-    )?;
+    Ok(())
+}
+
+fn typecheck_variable_for_binding(scope: &mut Scope, mutable: bool, target: &mut Ast, init_type: Type) -> Result<()> {
+    match &mut target.info {
+        AstInfo::Literal => {
+            let Token { loc: target_loc, info: TokenInfo::Ident(ident) } = &target.token else {
+                panic!("[INTERNAL ERR] target node is a `Literal` node but not an `Ident` node.");
+            };
+
+            let binding = ScopeBinding::Var(VariableBinding {
+                is_mut: mutable,
+                typ: init_type,
+                is_global: scope.is_global(),
+                addr: 0,
+            });
+            scope.add_binding(
+                ident.clone(),
+                binding,
+                *target_loc,
+                format!("Redeclaration of `{}`", ident), // @TODO: Improve error
+            )?;
+        }
+        AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, type_constraint) => {
+            todo!()
+        }
+        _ => panic!("[INTERNAL ERR] target node is not an `Ident` or `ConstrainedVarDeclTarget` node."),
+    }
+
+    Ok(())
+}
+
+fn typecheck_var_decl_one_initializer(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast], init: &mut Ast) -> Result<()> {
+    typecheck_node(interp, init)?;
+    let Some(init_type) = init.typ else {
+        return Err(SourceError::new("Variable initializer has no type.", init.token.loc, "Cannot initialize a variable with typeless expression.").into());
+    };
+
+    for target in targets {
+        typecheck_variable_for_binding(scope, mutable, target, init_type)?;
+    }
+
+    Ok(())
+}
+
+fn typecheck_var_decl_many_initializers(interp: &mut Interpreter, scope: &mut Scope, mutable: bool, targets: &mut [Ast], inits: &mut [Ast]) -> Result<()> {
+    assert_eq!(targets.len(), inits.len(), "[INTERNAL ERR] number of targets and initializers aren't equal.");
+    for (target, init) in targets.iter_mut().zip(inits.iter_mut()) {
+        typecheck_node(interp, init)?;
+        let Some(init_type) = init.typ else {
+            return Err(SourceError::new("Variable initializer has no type.", init.token.loc, "Cannot initialize a variable with typeless expression.").into());
+        };
+
+        typecheck_variable_for_binding(scope, mutable, target, init_type)?;
+    }
 
     Ok(())
 }
@@ -313,7 +320,7 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
         }
         AstInfo::Var(info) => {
             let scope = &mut interp.scopes[node.scope.0];
-            typecheck_var_decl(scope, &node.token, info)?;
+            typecheck_var_decl(scope, info)?;
         }
         AstInfo::Fn(info) => todo!(),
         AstInfo::Import(info) => todo!(),
@@ -737,6 +744,9 @@ fn typecheck_binary(
         }
         AstBinaryKind::Param => {
             unreachable!("`Param` nodes get special handling when typechecking functions.");
+        }
+        AstBinaryKind::ConstrainedVarDeclTarget => {
+            unreachable!("`ConstrainedVarDeclTarget` nodes get special handling when typechecking variable declarations.");
         }
     };
 

@@ -121,5 +121,3 @@ pub enum Instruction {
     // Desc:   Calls builtin function `f`.
     // Schema: (size:u16, f:Builtin) [args...] -> [return_value?]
 }
-
-

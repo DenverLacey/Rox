@@ -1,11 +1,11 @@
 use crate::{
-    canon::scoping::{ScopeBinding, ScopeIndex, FuncID},
+    canon::scoping::{FuncID, ScopeBinding, ScopeIndex, Scope},
     interp::{Interpreter, ParsedFile},
     ir::{
         annotations::Annotations,
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind,
-            QueuedProgress, VariableInitializer, Queued,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
+            QueuedProgress, 
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -46,14 +46,20 @@ pub fn compile_executable(files: &mut [ParsedFile]) -> Result<Executable> {
             compiler.compile_node(&queued.node)?;
             queued.progress = QueuedProgress::Compiled;
         }
-        
+
         if all_compiled {
             break;
         }
     }
 
-    let global_scope = compiler.func_builders.pop().expect("[INTERNAL ERR] No global scope remaining after compilation.");
-    assert!(compiler.func_builders.is_empty(), "FunctionBuilder's still left over after compilation.");
+    let global_scope = compiler
+        .func_builders
+        .pop()
+        .expect("[INTERNAL ERR] No global scope remaining after compilation.");
+    assert!(
+        compiler.func_builders.is_empty(),
+        "FunctionBuilder's still left over after compilation."
+    );
 
     global_scope.build();
 
@@ -115,11 +121,15 @@ impl Compiler {
     }
 
     fn current_function_mut(&mut self) -> &mut FunctionBuilder {
-        self.func_builders.last_mut().expect("[INTERNAL ERR] No function builders.")
+        self.func_builders
+            .last_mut()
+            .expect("[INTERNAL ERR] No function builders.")
     }
 
     fn current_function(&self) -> &FunctionBuilder {
-        self.func_builders.last().expect("[INTERNAL ERR] No function builders.")
+        self.func_builders
+            .last()
+            .expect("[INTERNAL ERR] No function builders.")
     }
 
     fn begin_building_function(&mut self, id: FuncID) {
@@ -132,8 +142,15 @@ impl Compiler {
     }
 
     fn finish_building_function(&mut self, id: FuncID) {
-        let finished = self.func_builders.pop().expect("[INTERNAL ERR] No builder's to end.");
-        assert_eq!(finished.func_id, id, "[INTERNAL ERR] Attempted to end a function builder with the wrong ID. {:?} vs. {:?}", finished.func_id, id);
+        let finished = self
+            .func_builders
+            .pop()
+            .expect("[INTERNAL ERR] No builder's to end.");
+        assert_eq!(
+            finished.func_id, id,
+            "[INTERNAL ERR] Attempted to end a function builder with the wrong ID. {:?} vs. {:?}",
+            finished.func_id, id
+        );
 
         finished.build();
     }
@@ -258,7 +275,12 @@ impl Compiler {
         }
     }
 
-    fn compile_literal(&mut self, scope: ScopeIndex, token: &Token, typ: Option<Type>) -> Result<()> {
+    fn compile_literal(
+        &mut self,
+        scope: ScopeIndex,
+        token: &Token,
+        typ: Option<Type>,
+    ) -> Result<()> {
         let stack_top = self.stack_top();
 
         match &token.info {
@@ -302,7 +324,9 @@ impl Compiler {
                 let fn_ptr = fn_ref as *const _ as *const ();
                 self.emit_ptr(fn_ptr);
 
-                size = std::mem::size_of::<Pointer>().try_into().expect("[INTERNAL ERR] Size of `Pointer` doesn't fit in a `Size`.");
+                size = std::mem::size_of::<Pointer>()
+                    .try_into()
+                    .expect("[INTERNAL ERR] Size of `Pointer` doesn't fit in a `Size`.");
             }
             ScopeBinding::Type(typ) => {
                 todo!()
@@ -361,7 +385,7 @@ impl Compiler {
 
             let stack_top = self.stack_top();
             var.addr = stack_top;
-            
+
             self.set_stack_top(stack_top + var.typ.size());
         }
 
@@ -382,37 +406,58 @@ impl Compiler {
         token: &Token,
         info: &AstInfoVar,
     ) -> Result<()> {
-        match &info.targets.info {
-            AstInfo::Literal => {
-                let TokenInfo::Ident(ident) = &info.targets.token.info else {
-                    panic!("[INTERNAL ERR] `targets` node in var decl node not an `Ident` node.");
-                };
-
-                let init_expr = match &info.initializer {
-                    VariableInitializer::Expr(expr) => expr,
-                    _ => todo!(),
-                };
-                self.compile_var_decl_one_target(scope, ident, init_expr)
-            }
-            AstInfo::Block(AstBlockKind::VarDeclTargets, target_nodes) => {
-                todo!()
-            }
-            _ => panic!(
-                "[INTERNAL ERR] Invalid node kind `{:?}` for `targets` node in var decl.",
-                info.targets.info
-            ),
+        match info.initializers.as_slice() {
+            [] => self.compile_var_decl_no_initializer(scope, &info.targets),
+            [init] => self.compile_var_decl_one_initalizer(scope, &info.targets, init),
+            inits => self.compile_var_decl_many_initializers(scope, &info.targets, inits),
         }
     }
 
-    fn compile_var_decl_one_target(
-        &mut self,
-        scope: ScopeIndex,
-        ident: &str,
-        init_expr: &Ast,
-    ) -> Result<()> {
+    fn compile_var_decl_no_initializer(&mut self, scope: ScopeIndex, targets: &[Ast]) -> Result<()> {
+        todo!()
+    }
+
+    fn compile_var_decl_one_initalizer(&mut self, scope: ScopeIndex, targets: &[Ast], init: &Ast) -> Result<()> {
         let interp = Interpreter::get_mut();
         let scope = &mut interp.scopes[scope.0];
+        let is_global_scope = scope.is_global();
 
+        let stack_top = self.stack_top();
+        let typ = init.typ.expect("[INTERNAL ERR] variable initalizer doesn't have a type.");
+
+        self.compile_node(init)?;
+        for _ in 1..targets.len() {
+            self.emit_dup(is_global_scope, typ.size(), stack_top);
+        }
+
+        for (i, target) in targets.iter().enumerate() {
+            let i: Size = i.try_into().expect("[INTERNAL ERR] Too many targets to fit in a `Size`.");
+
+            let ident = match &target.info {
+                AstInfo::Literal => match &target.token.info {
+                    TokenInfo::Ident(ident) => ident,
+                    _ => panic!("[INTERNAL ERR] target node in `Var` node is a `Literal` but not an `Ident`."),
+                },
+                AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, _) => match &ident.token.info {
+                    TokenInfo::Ident(ident) => ident,
+                    _ => panic!("[INTERNAL ERR] target node in `Var` node is a `ConstrainedVarDeclTarget` node where the lhs is not an `Ident` node."),
+                },
+                _ => panic!("[INTERNAL ERR] target node in `Var` node is not an `Ident` node or a `ConstrainedVarDeclTarget` node."),
+            };
+
+            self.bind_variable_address(stack_top + i * typ.size(), scope, ident, typ);
+        }
+
+        self.set_stack_top(stack_top + targets.len() as Size * typ.size());
+
+        Ok(())
+    }
+
+    fn compile_var_decl_many_initializers(&mut self, scope: ScopeIndex, targets: &[Ast], inits: &[Ast]) -> Result<()> {
+        todo!()
+    }
+
+    fn bind_variable_address(&mut self, addr: Addr, scope: &mut Scope, ident: &str, typ: Type) {
         let Some(binding) = scope.find_binding_mut(ident) else {
             panic!("[INTERNAL ERR] Unresolvable identifier `{}`.", ident);
         };
@@ -421,15 +466,10 @@ impl Compiler {
             panic!("[INTERNAL ERR] ident `{}` doesn't bind to a variable but a `{:?}`.", ident, binding);
         };
 
-        let stack_top = self.stack_top();
-        var.addr = stack_top;
+        var.addr = addr;
 
-        self.compile_node(init_expr)?;
-
-        let size = init_expr.typ.unwrap().size();
-        self.set_stack_top(stack_top + size);
-
-        Ok(())
+        let size = typ.size();
+        self.set_stack_top(addr + size);
     }
 
     fn compile_unary(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {
@@ -442,7 +482,12 @@ impl Compiler {
         }
     }
 
-    fn compile_unary_typical(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {
+    fn compile_unary_typical(
+        &mut self,
+        kind: AstUnaryKind,
+        typ: Option<Type>,
+        expr: &Ast,
+    ) -> Result<()> {
         let stack_top = self.stack_top();
         let expr_type = expr.typ.unwrap();
 
@@ -471,7 +516,6 @@ impl Compiler {
                 self.emit_call_builtin(Type::String.size(), builtins::XXXprint_String)
             }
 
-
             _ => panic!(
                 "[INTERNAL ERR] Invalid combination of type and unary kind (`{:?}`, `{:?}`).",
                 expr_type, kind
@@ -484,7 +528,13 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_binary(&mut self, kind: AstBinaryKind, typ: Option<Type>, lhs: &Ast, rhs: &Ast) -> Result<()> {
+    fn compile_binary(
+        &mut self,
+        kind: AstBinaryKind,
+        typ: Option<Type>,
+        lhs: &Ast,
+        rhs: &Ast,
+    ) -> Result<()> {
         match kind {
             AstBinaryKind::Add
             | AstBinaryKind::Sub
@@ -494,11 +544,22 @@ impl Compiler {
             AstBinaryKind::Assign => todo!(),
             AstBinaryKind::Call => self.compile_call(typ, lhs, rhs),
             AstBinaryKind::Subscript => todo!(),
-            AstBinaryKind::Param => panic!("[INTERNAL ERR] `Param` node not being handled by `compile_fn_decl()`."),
+            AstBinaryKind::Param => {
+                panic!("[INTERNAL ERR] `Param` node not being handled by `compile_fn_decl()`.")
+            }
+            AstBinaryKind::ConstrainedVarDeclTarget => {
+                panic!("[INTERNAL ERR] `ConstrainedVarDeclTarget` node not being handled in `compile_var_decl()`.")
+            }
         }
     }
 
-    fn compile_binary_typical(&mut self, kind: AstBinaryKind, typ: Option<Type>, lhs: &Ast, rhs: &Ast) -> Result<()> {
+    fn compile_binary_typical(
+        &mut self,
+        kind: AstBinaryKind,
+        typ: Option<Type>,
+        lhs: &Ast,
+        rhs: &Ast,
+    ) -> Result<()> {
         let stack_top = self.stack_top();
         let lhs_type = lhs.typ.unwrap();
         let rhs_type = rhs.typ.unwrap();

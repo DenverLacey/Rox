@@ -6,7 +6,7 @@ use crate::{
         annotations::{self, Annotations},
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport,
-            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, VariableInitializer,
+            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, 
         },
     },
     parsing::tokenization::*,
@@ -244,71 +244,58 @@ impl<'file> Parser<'file> {
             "Expected variable declaration to begin with either a `let` or `mut` keyword."
         );
 
-        let ident_tok = self.expect_token(
-            TokenInfoTag::Ident,
-            "Expected an identifier after `let` or `mut`.",
-        )?; // @TODO: Improve error message
-        let ident_or_idents = if self.check_token(TokenInfoTag::Comma)? {
+        let mut targets = vec![self.parse_expression()?];
+        while self.next_token_if_eq(TokenInfoTag::Comma)?.is_some() {
+            let ident_tok = self.expect_token(
+                TokenInfoTag::Ident,
+                "Expected an identifier.",
+            )?;
             let ident = Ast::new_literal(ident_tok);
-            let mut idents = vec![ident];
 
-            while self.next_token_if_eq(TokenInfoTag::Comma)?.is_some() {
-                let ident_tok = self.expect_token(
-                    TokenInfoTag::Ident,
-                    "Expected an identifier after `,` in variable declaration.",
-                )?;
-                let ident = Ast::new_literal(ident_tok);
-                idents.push(ident);
+            if self.check_token(TokenInfoTag::Colon)? {
+                let colon_tok = self.next_token().expect("Already peeked.");
+                let type_constraint = self.parse_expression()?;
+                let target = Ast::new_binary(AstBinaryKind::ConstrainedVarDeclTarget, colon_tok, Box::new(ident), Box::new(type_constraint));
+                targets.push(target);
+            } else {
+                targets.push(ident);
             }
+        }
 
-            Ast::new_block(
-                AstBlockKind::VarDeclTargets,
-                idents[0].token.clone(),
-                idents,
-            )
-        } else {
-            Ast::new_literal(ident_tok)
-        };
-
-        let type_constraint = if self.match_token(TokenInfoTag::Colon)? {
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
-
-        let init_expr = if self.match_token(TokenInfoTag::Equal)? {
+        let initializers = if self.match_token(TokenInfoTag::Equal)? {
             let expr = self.parse_expression()?;
             if self.match_token(TokenInfoTag::Comma)? {
-                Some(self.parse_comma_separated_expressions(
+                let exprs = self.parse_comma_separated_expressions(
                     AstBlockKind::Comma,
                     TokenInfoTag::Newline,
                     Some(expr),
-                )?)
+                )?;
+
+                let AstInfo::Block(_, exprs) = exprs.info else {
+                    panic!("[INTERNAL ERR] `parse_comma_separated_expressions` return a non `Block` node.");
+                };
+                exprs
             } else {
-                Some(expr)
+                vec![expr]
             }
         } else {
-            None
+            vec![]
         };
 
-        let initializer = match (type_constraint, init_expr) {
-            (Some(tc), Some(ie)) => VariableInitializer::TypeAndExpr(tc, ie),
-            (None, Some(ie)) => VariableInitializer::Expr(ie),
-            (Some(tc), None) => VariableInitializer::Type(tc),
-            _ => {
-                return Err(error!(
-                    "Variable declarations must declare a variables type, inital value or both."
-                ))
-            }
-        };
+        let num_targets = targets.len();
+        let num_exprs = initializers.len();
+        if (num_exprs == 0 && num_targets != 1) || (num_exprs != num_targets) && num_exprs != 1 {
+            // @TODO: Improve error message
+            return Err(SourceError::new("Incorrect number of targets for number of expressions.", var_tok.loc, "This variable declaration has incorrect number of targets for the number of expressions.").into());
+        }
 
         let mutable = matches!(var_tok.info, TokenInfo::Mut);
         Ok(Ast::new(
             var_tok,
             AstInfo::Var(Box::new(AstInfoVar {
                 mutable,
-                targets: ident_or_idents,
-                initializer,
+                targets,
+                initializers,
             })),
         ))
     }
@@ -388,7 +375,11 @@ impl<'file> Parser<'file> {
         let node = match token.info {
             TokenInfo::XXXPrint => {
                 let token = self.next_token().expect("Already peeked");
-                self.parse_unary_with_precedence(AstUnaryKind::XXXPrint, TokenPrecedence::Assignment, token)?
+                self.parse_unary_with_precedence(
+                    AstUnaryKind::XXXPrint,
+                    TokenPrecedence::Assignment,
+                    token,
+                )?
             }
             _ => self.parse_expression()?,
         };
@@ -502,7 +493,12 @@ impl<'file> Parser<'file> {
         self.parse_unary_with_precedence(kind, TokenPrecedence::Unary, token)
     }
 
-    fn parse_unary_with_precedence(&mut self, kind: AstUnaryKind, prec: TokenPrecedence, token: Token) -> ParseResult {
+    fn parse_unary_with_precedence(
+        &mut self,
+        kind: AstUnaryKind,
+        prec: TokenPrecedence,
+        token: Token,
+    ) -> ParseResult {
         self.skip_newline()?;
         let sub_expression = self.parse_precedence(prec)?;
         Ok(Ast::new_unary(kind, token, Box::new(sub_expression)))

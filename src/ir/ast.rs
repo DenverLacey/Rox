@@ -51,6 +51,7 @@ pub enum AstBinaryKind {
     Call,
     Subscript,
     Param,
+    ConstrainedVarDeclTarget,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,15 +76,8 @@ pub struct AstInfoFn {
 #[derive(Debug)]
 pub struct AstInfoVar {
     pub mutable: bool,
-    pub targets: Ast,
-    pub initializer: VariableInitializer,
-}
-
-#[derive(Debug)]
-pub enum VariableInitializer {
-    TypeAndExpr(Ast, Ast),
-    Type(Ast),
-    Expr(Ast),
+    pub targets: Vec<Ast>,
+    pub initializers: Vec<Ast>,
 }
 
 #[derive(Debug)]
