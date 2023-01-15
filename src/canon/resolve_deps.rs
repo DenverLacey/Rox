@@ -118,6 +118,7 @@ impl<'files> Resolver<'files> {
                     AstInfo::Import(_) => {}
                     AstInfo::TypeValue(_) => unreachable!(),
                     AstInfo::TypeSignature(_) => {}
+                    AstInfo::If(_) => {}
                 }
             }
         }
@@ -185,6 +186,7 @@ impl<'files> Resolver<'files> {
             AstInfo::Import(_) => {}
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(_) => {}
+            AstInfo::If(_) => {}
         }
 
         node.progress = QueuedProgress::DependenciesFound;
@@ -254,6 +256,14 @@ impl<'files> Resolver<'files> {
                     }
                 }
             },
+            AstInfo::If(info) => {
+                Self::resolve_dependencies_for_node(current_scope, deps, &info.condition);
+                Self::resolve_dependencies_for_node(current_scope, deps, &info.then_block);
+
+                if let Some(else_block) = &info.else_block {
+                    Self::resolve_dependencies_for_node(current_scope, deps, else_block);
+                }
+            }
         }
     }
 

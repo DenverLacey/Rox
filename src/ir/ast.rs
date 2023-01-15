@@ -27,6 +27,7 @@ pub enum AstInfo {
     Import(Box<AstInfoImport>),
     TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
+    If(Box<AstInfoIf>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +89,13 @@ pub struct AstInfoImport {
 #[derive(Debug)]
 pub enum AstInfoTypeSignature {
     Function(Ast, Option<Ast>),
+}
+
+#[derive(Debug)]
+pub struct AstInfoIf {
+    pub condition: Ast,
+    pub then_block: Ast,
+    pub else_block: Option<Ast>,
 }
 
 impl Ast {

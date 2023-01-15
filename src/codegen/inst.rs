@@ -1,6 +1,6 @@
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instruction {
     NoOp = 0,
 

@@ -82,6 +82,8 @@ pub enum TokenInfo {
     Mut,
     Fn,
     As,
+    If,
+    Else,
 
     XXXPrint,
 }
@@ -118,6 +120,8 @@ impl TokenInfo {
             TokenInfo::Mut => TokenPrecedence::None,
             TokenInfo::Fn => TokenPrecedence::None,
             TokenInfo::As => TokenPrecedence::Cast,
+            TokenInfo::If => TokenPrecedence::None,
+            TokenInfo::Else => TokenPrecedence::None,
             TokenInfo::XXXPrint => TokenPrecedence::None,
         }
     }
@@ -155,6 +159,8 @@ impl Display for TokenInfo {
             TokenInfo::Mut => write!(f, "mut"),
             TokenInfo::Fn => write!(f, "fn"),
             TokenInfo::As => write!(f, "as"),
+            TokenInfo::If => write!(f, "if"),
+            TokenInfo::Else => write!(f, "else"),
             TokenInfo::XXXPrint => write!(f, "XXXprint"),
         }
     }
@@ -479,6 +485,8 @@ impl<'file> Tokenizer<'file> {
             "mut" => Token::new(tok_loc, TokenInfo::Mut),
             "fn" => Token::new(tok_loc, TokenInfo::Fn),
             "as" => Token::new(tok_loc, TokenInfo::As),
+            "if" => Token::new(tok_loc, TokenInfo::If),
+            "else" => Token::new(tok_loc, TokenInfo::Else),
             "XXXprint" => Token::new(tok_loc, TokenInfo::XXXPrint),
             _ => Token::new(tok_loc, TokenInfo::Ident(word)),
         }

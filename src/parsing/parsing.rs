@@ -5,7 +5,7 @@ use crate::{
     ir::{
         annotations::{self, Annotations},
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoImport,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoImport,
             AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued,
         },
     },
@@ -247,7 +247,8 @@ impl<'file> Parser<'file> {
         let mut initializers_required = false;
         let mut targets = vec![];
         loop {
-            let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
+            let ident_tok =
+                self.skip_expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
             let ident = Ast::new_literal(ident_tok);
 
             if self.check_token(TokenInfoTag::Colon)? {
@@ -267,7 +268,7 @@ impl<'file> Parser<'file> {
 
             if self.next_token_if_eq(TokenInfoTag::Comma)?.is_none() {
                 break;
-            } 
+            }
         }
 
         let initializers = if self.match_token(TokenInfoTag::Equal)? {
@@ -292,7 +293,10 @@ impl<'file> Parser<'file> {
 
         let num_targets = targets.len();
         let num_exprs = initializers.len();
-        if initializers_required && ((num_exprs == 0 && num_targets != 1) || (num_exprs != num_targets) && num_exprs != 1) {
+        if initializers_required
+            && ((num_exprs == 0 && num_targets != 1)
+                || (num_exprs != num_targets) && num_exprs != 1)
+        {
             // @TODO: Improve error message
             return Err(SourceError::new("Incorrect number of targets for number of expressions.", var_tok.loc, "This variable declaration has incorrect number of targets for the number of expressions.").into());
         }
@@ -381,6 +385,7 @@ impl<'file> Parser<'file> {
     fn parse_statement(&mut self) -> ParseResult {
         let token = self.peek_token(0)?;
         let node = match token.info {
+            TokenInfo::If => self.parse_if_statement()?,
             TokenInfo::XXXPrint => {
                 let token = self.next_token().expect("Already peeked");
                 self.parse_unary_with_precedence(
@@ -393,6 +398,37 @@ impl<'file> Parser<'file> {
         };
 
         Ok(node)
+    }
+
+    fn parse_if_statement(&mut self) -> ParseResult {
+        let if_tok = self.expect_token(
+            TokenInfoTag::If,
+            "Expected `if` keyword to begin if statement.",
+        )?;
+
+        let condition = self.parse_expression()?;
+        let then_block = self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?;
+
+        let else_block = if self.skip_match_token(TokenInfoTag::Else)? {
+            let node = if self.skip_check_token(TokenInfoTag::If)? {
+                self.parse_if_statement()?
+            } else {
+                self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?
+            };
+
+            Some(node)
+        } else {
+            None
+        };
+
+        Ok(Ast::new(
+            if_tok,
+            AstInfo::If(Box::new(AstInfoIf {
+                condition,
+                then_block,
+                else_block,
+            })),
+        ))
     }
 
     fn parse_expression(&mut self) -> ParseResult {

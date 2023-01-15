@@ -5,7 +5,7 @@ use crate::{
         annotations::Annotations,
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
-            QueuedProgress,
+            QueuedProgress, AstInfoIf,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -268,6 +268,26 @@ impl Compiler {
         self.emit_value(size);
         self.emit_value(builtin);
     }
+
+    fn emit_jump(&mut self, jump_inst: Instruction) -> usize {
+        self.emit_inst(jump_inst);
+
+        let jump = self.current_function().code.len();
+        self.emit_value(0 as Addr);
+
+        if jump_inst == Instruction::JumpTrue || jump_inst == Instruction::JumpFalse {
+            let stack_top = self.stack_top();
+            self.set_stack_top(stack_top - Type::Bool.size());
+        }
+
+        jump
+    }
+
+    fn patch_jump(&mut self, jump: usize) {
+        let to = self.current_function().code.len();
+        let jump_size: &mut Addr = unsafe { std::mem::transmute(&mut self.current_function_mut().code[jump]) };
+        *jump_size = (to - jump - std::mem::size_of::<Addr>()).try_into().expect("[INTERNAL ERR] jump too big to fit in an `Addr`.");
+    }
 }
 
 impl Compiler {
@@ -280,6 +300,7 @@ impl Compiler {
             AstInfo::Fn(info) => self.compile_fn_decl(&node.token, info),
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
             AstInfo::TypeValue(typ) => todo!(),
+            AstInfo::If(info) => self.compile_if_statement(info),
 
             AstInfo::Import(_) | AstInfo::TypeSignature(_) => unreachable!(),
         }
@@ -555,6 +576,27 @@ impl Compiler {
         };
 
         var.addr = addr;
+    }
+
+    fn compile_if_statement(&mut self, info: &AstInfoIf) -> Result<()> {
+        self.compile_node(&info.condition)?;
+        let else_jump = self.emit_jump(Instruction::JumpFalse);
+        let mut exit_jump = 0;
+
+        self.compile_node(&info.then_block)?;
+
+        if info.else_block.is_some() {
+            exit_jump = self.emit_jump(Instruction::Jump);
+        }
+
+        self.patch_jump(else_jump);
+
+        if let Some(else_block) = &info.else_block {
+            self.compile_node(else_block)?;
+            self.patch_jump(exit_jump);
+        }
+
+        Ok(())
     }
 
     fn compile_unary(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {

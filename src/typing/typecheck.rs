@@ -397,6 +397,19 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
                 node.info = AstInfo::TypeValue(fn_type);
             }
         },
+        AstInfo::If(info) => {
+            typecheck_node(interp, &mut info.condition)?;
+
+            if info.condition.typ.filter(|t| matches!(*t, Type::Bool)).is_none() {
+                return Err(SourceError::new("Type mismatch!", info.condition.token.loc, "Expected a `Bool` value here.").into());
+            }
+            
+            typecheck_node(interp, &mut info.then_block)?;
+
+            if let Some(else_block) = &mut info.else_block {
+                typecheck_node(interp, else_block)?;
+            }
+        }
     }
 
     Ok(())

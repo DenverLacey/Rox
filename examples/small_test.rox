@@ -10,6 +10,7 @@ fn main() {
     bar()
     baz()
     biz()
+    fuzz()
 }
 
 fn foo(k: Int) {
@@ -28,8 +29,22 @@ fn baz() {
 } 
 
 fn biz() {
-    let int: Int, bool: Bool, float: Float
+    let
+        int: Int,
+        bool: Bool,
+        float: Float
+
     XXXprint int
     XXXprint bool
     XXXprint float
+}
+
+fn fuzz() {
+    if false {
+        XXXprint "[1] This was if."
+    } else if true {
+        XXXprint "[1] This was else if."
+    } else {
+        XXXprint "[1] This is else"
+    }
 }

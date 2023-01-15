@@ -209,6 +209,14 @@ impl<'a> Scoper<'a> {
                     }
                 }
             },
+            AstInfo::If(info) => {
+                self.establish_scope_for_node(current_scope, &mut info.condition)?;
+                self.establish_scope_for_node(current_scope, &mut info.then_block)?;
+
+                if let Some(else_block) = &mut info.else_block {
+                    self.establish_scope_for_node(current_scope, else_block);
+                }
+            }
         }
 
         Ok(())

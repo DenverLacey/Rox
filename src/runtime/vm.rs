@@ -57,7 +57,7 @@ impl Stack {
 
     pub fn alloc(&self, size: Size) {
         let me = unsafe { &mut *self.inner.get() };
-        
+
         if me.top + size as usize >= STACK_SIZE {
             panic!("Stack overflow.");
         }
@@ -67,12 +67,12 @@ impl Stack {
 
     pub fn calloc(&self, size: Size) {
         let me = unsafe { &mut *self.inner.get() };
-        
-        if me.top + size as usize >= STACK_SIZE {
-            panic!("Stack overflow.");
-        }
 
-        for byte in me.buffer.get_mut(me.top..(me.top + size as usize)).expect("Stack overflow.") {
+        for byte in me
+            .buffer
+            .get_mut(me.top..(me.top + size as usize))
+            .expect("Stack overflow.")
+        {
             *byte = 0;
         }
 

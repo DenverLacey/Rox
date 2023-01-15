@@ -294,7 +294,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             Jump => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: Jump => {:04x}",
+                    "{:04X}: Jump => {:04X}",
                     inst_idx,
                     reader.offset() + jump as usize
                 );
@@ -302,7 +302,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             JumpBack => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: Loop => {:04x}",
+                    "{:04X}: Loop => {:04X}",
                     inst_idx,
                     reader.offset() - jump as usize
                 );
@@ -310,7 +310,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             JumpTrue => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: JumpTrue => {:04x}",
+                    "{:04X}: JumpTrue => {:04X}",
                     inst_idx,
                     reader.offset() + jump as usize
                 );
@@ -318,7 +318,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             JumpFalse => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: JumpFalse => {:04x}",
+                    "{:04X}: JumpFalse => {:04X}",
                     inst_idx,
                     reader.offset() + jump as usize
                 );
@@ -326,7 +326,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             JumpTrueNoPop => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: JumpTrueNoPop => {:04x}",
+                    "{:04X}: JumpTrueNoPop => {:04X}",
                     inst_idx,
                     reader.offset() + jump as usize
                 );
@@ -334,7 +334,7 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
             JumpFalseNoPop => {
                 let jump: Addr = reader.read();
                 println!(
-                    "{:04X}: JumpFalseNoPop => {:04x}",
+                    "{:04X}: JumpFalseNoPop => {:04X}",
                     inst_idx,
                     reader.offset() + jump as usize
                 );
