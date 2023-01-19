@@ -345,6 +345,9 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Call {}b", inst_idx, size * 8);
             }
+            Call_0 => {
+                println!("{:04X}: {:?}", inst_idx, inst);
+            }
             CallBuiltin => {
                 let size: Size = reader.read();
                 let builtin: Builtin = reader.read();

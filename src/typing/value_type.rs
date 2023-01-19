@@ -33,7 +33,7 @@ impl Type {
                         let element_size = info.element_type.size() as usize;
                         count * element_size
                     }
-                    TypeInfo::Record(info) => info
+                    TypeInfo::Struct(info) => info
                         .fields
                         .iter()
                         .map(|field| field.typ.size() as usize)
@@ -78,7 +78,7 @@ impl Display for Type {
                     TypeInfo::Array(info) => {
                         write!(f, "[{}]{}", info.size, info.element_type)
                     }
-                    TypeInfo::Record(info) => {
+                    TypeInfo::Struct(info) => {
                         write!(f, "{}", info.name)
                     }
                     TypeInfo::Function(info) => {
@@ -107,7 +107,7 @@ impl Display for Type {
 pub enum TypeInfo {
     Pointer(TypeInfoPointer),
     Array(TypeInfoArray),
-    Record(TypeInfoRecord),
+    Struct(TypeInfoStruct),
     Function(TypeInfoFunction),
 }
 
@@ -124,13 +124,13 @@ pub struct TypeInfoArray {
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeInfoRecord {
+pub struct TypeInfoStruct {
     pub name: String,
-    pub fields: Box<[RecordField]>,
+    pub fields: Box<[StructField]>,
 }
 
 #[derive(Clone, Debug)]
-pub struct RecordField {
+pub struct StructField {
     pub name: String,
     pub typ: Type,
 }

@@ -196,6 +196,10 @@ impl<'a> Scoper<'a> {
                     self.establish_scope_for_node(current_scope, ex)?;
                 }
             }
+            AstInfo::Struct(info) => {
+                let struct_scope = self.push_scope(current_scope);
+                self.establish_scope_for_node(struct_scope, &mut info.body)?;
+            }
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(sig) => match sig.as_mut() {
                 AstInfoTypeSignature::Function(params, returns) => {
@@ -214,7 +218,7 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(current_scope, &mut info.then_block)?;
 
                 if let Some(else_block) = &mut info.else_block {
-                    self.establish_scope_for_node(current_scope, else_block);
+                    self.establish_scope_for_node(current_scope, else_block)?;
                 }
             }
         }

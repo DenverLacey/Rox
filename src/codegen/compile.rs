@@ -36,7 +36,7 @@ pub fn compile_executable(files: &mut [ParsedFile]) -> Result<Executable> {
             .flat_map(|file| file.ast.iter_mut())
             .filter(|queued| is_node_compilable(&queued.node))
         {
-            if !queued_ready_for_compile(&queued) {
+            if !queued_ready_for_compile(queued) {
                 all_compiled = false;
                 continue;
             } else if queued.is_compiled() {
@@ -259,8 +259,12 @@ impl Compiler {
     }
 
     fn emit_call(&mut self, size: Size) {
-        self.emit_inst(Instruction::Call);
-        self.emit_value(size);
+        if size == 0 {
+            self.emit_inst(Instruction::Call_0);
+        } else {
+            self.emit_inst(Instruction::Call);
+            self.emit_value(size);
+        }
     }
 
     fn emit_call_builtin(&mut self, size: Size, builtin: Builtin) {
@@ -302,7 +306,7 @@ impl Compiler {
             AstInfo::TypeValue(typ) => todo!(),
             AstInfo::If(info) => self.compile_if_statement(info),
 
-            AstInfo::Import(_) | AstInfo::TypeSignature(_) => unreachable!(),
+            AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => Ok(()),
         }
     }
 
@@ -676,6 +680,9 @@ impl Compiler {
             }
             AstBinaryKind::ConstrainedVarDeclTarget => {
                 panic!("[INTERNAL ERR] `ConstrainedVarDeclTarget` node not being handled in `compile_var_decl()`.")
+            }
+            AstBinaryKind::Field => {
+                panic!("[INTERNAL ERR] `Field` node not being handled in `compile_struct_body()`.")
             }
         }
     }

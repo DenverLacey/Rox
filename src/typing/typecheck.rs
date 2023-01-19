@@ -3,13 +3,13 @@ use crate::{
     interp::{Interpreter, ParsedFile},
     ir::ast::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Queued, QueuedProgress,
+        AstUnaryKind, Queued, QueuedProgress, AstInfoStruct,
     },
     parsing::tokenization::{Token, TokenInfo},
     util::errors::{Result, SourceError, SourceError2},
 };
 
-use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer};
+use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct, StructField};
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
     loop {
@@ -84,6 +84,11 @@ fn typecheck_queued(queued: &mut Queued) -> Result<()> {
                     queued.progress
                 ),
             }
+        }
+        AstInfo::Struct(info) => {
+            let scope = &mut interp.scopes[queued.node.scope.0];
+            typecheck_struct_decl(scope, &queued.node.token, info)?;
+            queued.progress = QueuedProgress::Typechecked;
         }
         AstInfo::Import(info) => todo!(),
         _ => {
@@ -335,6 +340,52 @@ fn typecheck_fn_body(scope: &mut Scope, token: &Token, info: &mut AstInfoFn) -> 
     typecheck_node(interp, &mut info.body)
 }
 
+fn typecheck_struct_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoStruct) -> Result<()> {
+    let interp = Interpreter::get_mut();
+
+    let TokenInfo::Ident(ident) = &info.ident.token.info else {
+        panic!("[INTERNAL ERR] `ident` node of `Struct` node not an `Ident` node.");
+    };
+
+    let AstInfo::Block(AstBlockKind::Fields, field_nodes) = &mut info.body.info else {
+        panic!("[INTERNAL ERR] `fields` node of `Struct` node not a `Fields` node.");
+    };
+
+    let mut fields = vec![];
+    for field in field_nodes {
+        let AstInfo::Binary(AstBinaryKind::Field, ident, typ) = &mut field.info else {
+            panic!("[INTERNAL ERR] `field` node of `Fields` node not a `Field` node.");
+        };
+
+        let TokenInfo::Ident(field_name) = &ident.token.info else {
+            panic!("[INTERNAL ERR] `ident` node of `Field` node not an `Ident` node.");
+        };
+
+        typecheck_node(interp, typ)?;
+        let AstInfo::TypeValue(field_type) = &typ.info else {
+            return Err(SourceError::new("Expected a type signature.", typ.token.loc, "This should be a type.").into());
+        };
+
+        let field = StructField {
+            name: field_name.clone(),
+            typ: *field_type,
+        };
+
+        fields.push(field);
+    }
+
+    let struct_info = TypeInfoStruct {
+        name: ident.clone(),
+        fields: fields.into_boxed_slice(),
+    };
+
+    let struct_type = interp.create_struct_type(struct_info);
+    let binding = ScopeBinding::Type(struct_type);
+    scope.add_binding(ident.clone(), binding, token.loc, format!("Redeclaration of `{}`.", ident))?;
+
+    Ok(())
+}
+
 fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
     match &mut node.info {
         AstInfo::Literal => {
@@ -360,6 +411,7 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
         }
         AstInfo::Fn(info) => todo!(),
         AstInfo::Import(info) => todo!(),
+        AstInfo::Struct(info) => todo!(),
         AstInfo::TypeValue(_) => {}
         AstInfo::TypeSignature(sig) => match sig.as_mut() {
             AstInfoTypeSignature::Function(params, returns) => {
@@ -369,7 +421,7 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
                     panic!("[INTERNAL ERR] `params` node isn't a `Params` node in type signature.");
                 };
 
-                let param_types = params.iter().enumerate().map(|(i, param)| {
+                let param_types = params.iter().map(|param| {
                     let AstInfo::TypeValue(param_type) = &param.info else {
                         return Err(SourceError::new("Parameter in function type signature not a type.", param.token.loc, "This should be a type.").into());
                     };
@@ -797,6 +849,9 @@ fn typecheck_binary(
         }
         AstBinaryKind::ConstrainedVarDeclTarget => {
             unreachable!("`ConstrainedVarDeclTarget` nodes get special handling when typechecking variable declarations.");
+        }
+        AstBinaryKind::Field => {
+            unreachable!("`Field` nodes get special handling when typechecking struct declarations.");
         }
     };
 

@@ -6,7 +6,7 @@ use crate::{
         annotations::{self, Annotations},
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoImport,
-            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued,
+            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, AstInfoStruct,
         },
     },
     parsing::tokenization::*,
@@ -150,6 +150,7 @@ impl<'file> Parser<'file> {
                 self.parse_annotations()?;
                 self.parse_declaration()
             }
+            TokenInfo::Struct => self.parse_struct_decl(),
             _ => self.parse_statement_or_assignment(),
         }
     }
@@ -363,6 +364,43 @@ impl<'file> Parser<'file> {
                 exposing,
             })),
         ))
+    }
+
+    fn parse_struct_decl(&mut self) -> ParseResult {
+        let struct_annons = self.clear_annontations_for_valid(annotations::STRUCT_ANNOTATIONS)?;
+
+        let struct_tok = self.expect_token(TokenInfoTag::Struct, "Expected `struct` keyword to begin struct declaration.")?;
+
+        let ident_tok = self.skip_expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
+        let ident = Ast::new_literal(ident_tok);
+
+        let body = self.parse_struct_body()?;
+
+        Ok(Ast::new(struct_tok, AstInfo::Struct(Box::new(AstInfoStruct {
+            annons: struct_annons,
+            id: 0,
+            ident,
+            body,
+        }))))
+    }
+
+    fn parse_struct_body(&mut self) -> ParseResult {
+        let token = self.next_token()?;
+
+        let mut fields = vec![];
+        while !self.skip_match_token(TokenInfoTag::CurlyClose)? && !self.check_token(TokenInfoTag::End)? {
+            let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected field name.")?;
+            let ident = Ast::new_literal(ident_tok);
+
+            let colon_tok = self.skip_expect_token(TokenInfoTag::Colon, "Expected `:` after field name.")?;
+
+            let typ = self.parse_expression()?;
+
+            let field = Ast::new_binary(AstBinaryKind::Field, colon_tok, Box::new(ident), Box::new(typ));
+            fields.push(field);
+        }
+
+        Ok(Ast::new_block(AstBlockKind::Fields, token, fields))
     }
 
     fn parse_statement_or_assignment(&mut self) -> ParseResult {

@@ -110,6 +110,13 @@ impl<'files> Resolver<'files> {
                             }
                         }
                     }
+                    AstInfo::Struct(info) => {
+                        let TokenInfo::Ident(ident) = &info.ident.token.info else {
+                            panic!("[INTERNAL ERR] `ident` node of `Struct` node not an `Ident` node.");
+                        };
+
+                        globals.push(Global { name: ident.clone(), queued_idx: idx });
+                    }
 
                     AstInfo::Literal => {}
                     AstInfo::Unary(_, _) => {}
@@ -178,6 +185,14 @@ impl<'files> Resolver<'files> {
                 );
                 Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             }
+            AstInfo::Struct(info) => {
+                let deps = &mut node.deps;
+
+                let AstInfo::Block(AstBlockKind::Fields, fields) = &info.body.info else {
+                    panic!("[INTERNAL ERR] `body` node in `Struct` node is not a `Fields` node.");
+                };
+                Self::resolve_dependencies_for_nodes(current_scope, deps, fields);
+            }
 
             AstInfo::Literal => {}
             AstInfo::Unary(_, _) => {}
@@ -218,10 +233,11 @@ impl<'files> Resolver<'files> {
             AstInfo::Unary(_, sub_expr) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, sub_expr)
             }
-            AstInfo::Binary(kind, lhs, rhs) => {
-                if *kind != AstBinaryKind::ConstrainedVarDeclTarget {
-                    Self::resolve_dependencies_for_node(current_scope, deps, lhs);
-                }
+            AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget | AstBinaryKind::Field, _, rhs) => {
+                Self::resolve_dependencies_for_node(current_scope, deps, rhs);
+            }
+            AstInfo::Binary(_, lhs, rhs) => {
+                Self::resolve_dependencies_for_node(current_scope, deps, lhs);
                 Self::resolve_dependencies_for_node(current_scope, deps, rhs);
             }
             AstInfo::Block(_, nodes) => {
@@ -242,6 +258,7 @@ impl<'files> Resolver<'files> {
                 );
                 Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             }
+            AstInfo::Struct(info) => todo!(),
             AstInfo::Import(info) => todo!(),
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(sig) => match sig.as_ref() {

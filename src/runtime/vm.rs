@@ -400,11 +400,16 @@ impl<'exe> VM<'exe> {
                 Call => {
                     let size: Size = frame.reader.read();
                     let f: &FunctionInfo = self.stack.pop_value();
-                    self.call(&*f, size);
+                    self.call(f, size);
                     frame = self
                         .frames
                         .last_mut()
                         .expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
+                }
+                Call_0 => {
+                    let f: &FunctionInfo = self.stack.pop_value();
+                    self.call(f, 0);
+                    frame = self.frames.last_mut().expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
                 }
                 CallBuiltin => {
                     let size: Size = frame.reader.read();
@@ -488,7 +493,7 @@ impl<'exe> VM<'exe> {
                             println!("{:04X}: {:?}", value_idx, value);
                         }
                         TypeInfo::Array(info) => todo!(),
-                        TypeInfo::Record(info) => todo!(),
+                        TypeInfo::Struct(info) => todo!(),
                         TypeInfo::Function(info) => todo!(),
                     }
                 }

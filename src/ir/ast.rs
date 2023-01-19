@@ -25,6 +25,7 @@ pub enum AstInfo {
     Fn(Box<AstInfoFn>),
     Var(Box<AstInfoVar>),
     Import(Box<AstInfoImport>),
+    Struct(Box<AstInfoStruct>),
     TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
     If(Box<AstInfoIf>),
@@ -52,6 +53,7 @@ pub enum AstBinaryKind {
     Subscript,
     Param,
     ConstrainedVarDeclTarget,
+    Field,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,6 +62,7 @@ pub enum AstBlockKind {
     Comma,
     Params,
     Args,
+    Fields,
 }
 
 #[derive(Debug)]
@@ -84,6 +87,13 @@ pub struct AstInfoImport {
     pub path: Ast,
     pub renamer: Option<Ast>,
     pub exposing: Option<Ast>,
+}
+
+#[derive(Debug)]
+pub struct AstInfoStruct {
+    pub annons: Annotations,
+    pub ident: Ast,
+    pub body: Ast,
 }
 
 #[derive(Debug)]

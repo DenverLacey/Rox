@@ -7,10 +7,16 @@ fn main() {
     foo(y)
     XXXprint "I wanna rox and roll!"
     XXXprint "I wanna rox and roll!"
+
     bar()
+
     baz()
+
     biz()
+
     fuzz()
+
+    let pos: Pos
 }
 
 fn foo(k: Int) {
@@ -48,3 +54,10 @@ fn fuzz() {
         XXXprint "[1] This is else"
     }
 }
+
+struct Pos {
+    x: Float
+    y: Float
+}
+
+

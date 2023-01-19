@@ -124,6 +124,9 @@ pub enum Instruction {
     // Desc:   Calls function pointed at by `f` and sets up a new `CallFrame` with `size` bytes as
     //         the parameters to the function.
     // Schema: (size:u16) [args..., f] -> [args...]
+    Call_0,
+    // Desc:   Calls a function pointed at by `f` with zero arguments.
+    // Schema: () [f] -> []
     CallBuiltin,
     // Desc:   Calls builtin function `f`.
     // Schema: (size:u16, f:Builtin) [args...] -> [return_value?]

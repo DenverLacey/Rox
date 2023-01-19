@@ -17,7 +17,7 @@ use crate::{
     typing::{
         typecheck::typecheck_program,
         value_type::{
-            Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoRecord,
+            Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct,
         },
     },
     util::errors::{error, Result},
@@ -198,9 +198,9 @@ impl Interpreter {
         Type::Composite(idx)
     }
 
-    pub fn create_record_type(&mut self, info: TypeInfoRecord) -> Type {
+    pub fn create_struct_type(&mut self, info: TypeInfoStruct) -> Type {
         let idx = self.types.len();
-        let new_type = TypeInfo::Record(info);
+        let new_type = TypeInfo::Struct(info);
         self.types.push(new_type);
 
         Type::Composite(idx)

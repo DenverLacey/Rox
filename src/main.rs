@@ -15,7 +15,7 @@ fn main() {
         let mut args = std::env::args().skip(1);
         let project_path = args
             .next()
-            .ok_or(error!("Please provide a path to a project."))?;
+            .ok_or_else(|| error!("Please provide a path to a project."))?;
 
         let interpreter = Interpreter::get_mut();
         let exe = interpreter.generate_executable(project_path)?;
