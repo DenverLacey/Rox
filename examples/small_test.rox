@@ -16,7 +16,9 @@ fn main() {
 
     fuzz()
 
-    let pos: Pos
+    if false {
+        let pos = Pos(13.0, 17.0)
+    }
 }
 
 fn foo(k: Int) {
@@ -59,5 +61,4 @@ struct Pos {
     x: Float
     y: Float
 }
-
 

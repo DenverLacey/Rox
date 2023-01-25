@@ -6,7 +6,7 @@ use crate::{
         annotations::{self, Annotations},
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoImport,
-            AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued, AstInfoStruct,
+            AstInfoStruct, AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -91,6 +91,27 @@ impl<'file> Parser<'file> {
     fn skip_match_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
         self.skip_newline()?;
         self.match_token(kind)
+    }
+
+    fn peek_match_token(&mut self, kind: TokenInfoTag) -> Result<bool> {
+        let peek0 = self.peek_token(0)?;
+        if peek0.info.tag() == kind {
+            self.next_token().expect("Already been peeked.");
+            return Ok(true);
+        }
+
+        if peek0.info.tag() != TokenInfoTag::Newline {
+            return Ok(false);
+        }
+
+        let peek1 = self.peek_token(1)?;
+        if peek1.info.tag() == kind {
+            self.skip_newline()?;
+            self.next_token().expect("Already been peeked.");
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     fn expect_token(&mut self, kind: TokenInfoTag, err: impl Into<String>) -> Result<Token> {
@@ -369,34 +390,47 @@ impl<'file> Parser<'file> {
     fn parse_struct_decl(&mut self) -> ParseResult {
         let struct_annons = self.clear_annontations_for_valid(annotations::STRUCT_ANNOTATIONS)?;
 
-        let struct_tok = self.expect_token(TokenInfoTag::Struct, "Expected `struct` keyword to begin struct declaration.")?;
+        let struct_tok = self.expect_token(
+            TokenInfoTag::Struct,
+            "Expected `struct` keyword to begin struct declaration.",
+        )?;
 
         let ident_tok = self.skip_expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
         let ident = Ast::new_literal(ident_tok);
 
         let body = self.parse_struct_body()?;
 
-        Ok(Ast::new(struct_tok, AstInfo::Struct(Box::new(AstInfoStruct {
-            annons: struct_annons,
-            id: 0,
-            ident,
-            body,
-        }))))
+        Ok(Ast::new(
+            struct_tok,
+            AstInfo::Struct(Box::new(AstInfoStruct {
+                annons: struct_annons,
+                ident,
+                body,
+            })),
+        ))
     }
 
     fn parse_struct_body(&mut self) -> ParseResult {
         let token = self.next_token()?;
 
         let mut fields = vec![];
-        while !self.skip_match_token(TokenInfoTag::CurlyClose)? && !self.check_token(TokenInfoTag::End)? {
+        while !self.skip_match_token(TokenInfoTag::CurlyClose)?
+            && !self.check_token(TokenInfoTag::End)?
+        {
             let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected field name.")?;
             let ident = Ast::new_literal(ident_tok);
 
-            let colon_tok = self.skip_expect_token(TokenInfoTag::Colon, "Expected `:` after field name.")?;
+            let colon_tok =
+                self.skip_expect_token(TokenInfoTag::Colon, "Expected `:` after field name.")?;
 
             let typ = self.parse_expression()?;
 
-            let field = Ast::new_binary(AstBinaryKind::Field, colon_tok, Box::new(ident), Box::new(typ));
+            let field = Ast::new_binary(
+                AstBinaryKind::Field,
+                colon_tok,
+                Box::new(ident),
+                Box::new(typ),
+            );
             fields.push(field);
         }
 
@@ -447,8 +481,8 @@ impl<'file> Parser<'file> {
         let condition = self.parse_expression()?;
         let then_block = self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?;
 
-        let else_block = if self.skip_match_token(TokenInfoTag::Else)? {
-            let node = if self.skip_check_token(TokenInfoTag::If)? {
+        let else_block = if self.peek_match_token(TokenInfoTag::Else)? {
+            let node = if self.check_token(TokenInfoTag::If)? {
                 self.parse_if_statement()?
             } else {
                 self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?

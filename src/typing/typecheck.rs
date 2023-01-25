@@ -5,7 +5,7 @@ use crate::{
         Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
         AstUnaryKind, Queued, QueuedProgress, AstInfoStruct,
     },
-    parsing::tokenization::{Token, TokenInfo},
+    parsing::tokenization::{Token, TokenInfo, CodeLocation},
     util::errors::{Result, SourceError, SourceError2},
 };
 
@@ -767,79 +767,64 @@ fn typecheck_binary(
             typecheck_node(interp, lhs)?;
             typecheck_node(interp, rhs)?;
 
-            let fn_info = if let Some(Type::Composite(lhs_type)) = lhs.typ {
-                let type_info = &interp.types[lhs_type];
-                if let TypeInfo::Function(fn_info) = type_info {
-                    fn_info
-                } else {
-                    return Err(SourceError::new(
-                        "Cannot call something that isn't a function.",
-                        lhs.token.loc,
-                        format!(
-                            "Should be a function type but is `{}`.",
-                            Type::Composite(lhs_type)
-                        ),
-                    )
-                    .into());
-                }
-            } else {
-                return Err(SourceError::new(
-                    "Cannot call something that isn't a function.",
-                    lhs.token.loc,
-                    "Should be a function type but has no type.",
-                )
-                .into());
-            };
-
             let AstInfo::Block(AstBlockKind::Args, args) = &rhs.info else {
                 panic!("[INTERNAL ERR] `rhs` node of `Call` node is not a `Params` node.");
             };
 
-            if fn_info.params.len() != args.len() {
-                if args.is_empty() {
+            let return_type: Option<Type>;
+
+            match lhs.typ {
+                Some(Type::Composite(lhs_type)) => {
+                    let type_info = &interp.types[lhs_type];
+                    if let TypeInfo::Function(fn_info) = type_info {
+                        typecheck_arguments(rhs.token.loc, fn_info.params.iter().copied(), args)?;
+                        return_type = fn_info.returns;
+                    } else {
+                        return Err(SourceError::new(
+                            format!("Cannot call `{}`", Type::Composite(lhs_type)),
+                            lhs.token.loc,
+                            "This isn't a callable value.",
+                        )
+                            .into());
+                    }
+                } 
+                Some(Type::Type) => {
+                    let AstInfo::TypeValue(Type::Composite(lhs_type)) = &lhs.info else {
+                        panic!("[INTERNAL ERR] lhs of `Call` node is of type `Type` but is not a `TypeValue` node.");
+                    };
+
+                    let type_info = &interp.types[*lhs_type];
+                    if let TypeInfo::Struct(struct_info) = type_info {
+                        typecheck_arguments(rhs.token.loc, struct_info.fields.iter().map(|f| f.typ), args)?;
+                        return_type = lhs.typ;
+                    } else {
+                        return Err(SourceError::new(
+                            format!("Cannot call `{}`", Type::Composite(*lhs_type)),
+                            lhs.token.loc,
+                            "This isn't a callable value.",
+                        )
+                            .into());
+                    }
+                }
+                Some(lhs_type) => {
                     return Err(SourceError::new(
-                        "Incorrect number of arguments.",
-                        rhs.token.loc,
-                        format!(
-                            "Expected {} argument(s) but was given 0.",
-                            fn_info.params.len()
-                        ),
+                        format!("Cannot call `{}`", lhs_type),
+                        lhs.token.loc,
+                        "This isn't a callable value.",
                     )
-                    .into());
-                } else {
-                    let first_bad = std::cmp::min(fn_info.params.len(), args.len());
-                    let arg = &args[first_bad];
+                        .into());
+                }
+                None => {
                     return Err(SourceError::new(
-                        "Incorrect number of arguments.",
-                        arg.token.loc,
-                        format!(
-                            "Expected {} argument(s) but was given {}.",
-                            fn_info.params.len(),
-                            args.len()
-                        ),
+                        "Cannot call typeless value",
+                        lhs.token.loc,
+                        "This isn't a callable value.",
                     )
-                    .into());
+                        .into());
                 }
             }
 
-            for i in 0..args.len() {
-                let arg = &args[i];
-                let given = arg
-                    .typ
-                    .expect("[INTERNAL ERR] argument doesn't have a type.");
-                let expected = fn_info.params[i];
-
-                if given != expected {
-                    return Err(SourceError::new(
-                        "Type mismatch.",
-                        arg.token.loc,
-                        format!("Type should be `{}` but is `{}`.", expected, given),
-                    )
-                    .into());
-                }
-            }
-
-            fn_info.returns
+            return_type
         }
         AstBinaryKind::Subscript => {
             todo!()
@@ -856,6 +841,52 @@ fn typecheck_binary(
     };
 
     Ok(typ)
+}
+
+fn typecheck_arguments(call_loc: CodeLocation, params: impl ExactSizeIterator<Item = Type>, args: &[Ast]) -> Result<()> {
+    if params.len() != args.len() {
+        if args.is_empty() {
+            return Err(SourceError::new(
+                "Incorrect number of arguments.",
+                call_loc,
+                format!(
+                    "Expected {} argument(s) but was given 0.",
+                    params.len()
+                ),
+            )
+                .into());
+        } else {
+            let first_bad = std::cmp::min(params.len(), args.len());
+            let arg = &args[first_bad];
+            return Err(SourceError::new(
+                "Incorrect number of arguments.",
+                arg.token.loc,
+                format!(
+                    "Expected {} argument(s) but was given {}.",
+                    params.len(),
+                    args.len()
+                ),
+            )
+                .into());
+        }
+    }
+
+    for (arg, expected) in args.iter().zip(params) {
+        let given = arg
+            .typ
+            .expect("[INTERNAL ERR] argument doesn't have a type.");
+
+        if given != expected {
+            return Err(SourceError::new(
+                "Type mismatch.",
+                arg.token.loc,
+                format!("Type should be `{}` but is `{}`.", expected, given),
+            )
+                .into());
+        }
+    }
+
+    Ok(())
 }
 
 fn typecheck_block(

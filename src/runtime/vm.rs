@@ -345,6 +345,10 @@ impl<'exe> VM<'exe> {
                     let size: Size = frame.reader.read();
                     self.stack.pop(size);
                 }
+                Flush => {
+                    let addr: Addr = frame.reader.read();
+                    self.stack.flush(addr);
+                }
                 Alloc => {
                     let size: Size = frame.reader.read();
                     self.stack.alloc(size);

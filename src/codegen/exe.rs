@@ -285,6 +285,10 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Pop {}b", inst_idx, size * 8);
             }
+            Flush => {
+                let addr: Addr = reader.read();
+                println!("{:04X}: Flush => [{}]", inst_idx, addr);
+            }
             Alloc | AllocZ => {
                 let size: Size = reader.read();
                 println!("{:04X}: {:?} {}b", inst_idx, inst, size * 8);

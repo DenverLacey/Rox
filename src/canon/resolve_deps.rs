@@ -32,7 +32,7 @@ impl<'files> Resolver<'files> {
         dprintln!("Globals = {:#?}", self.globals);
 
         for file_idx in 0..self.files.len() {
-            self.resolve_dependencies_for_file(file_idx)?;
+            self.resolve_dependencies_for_file(file_idx);
         }
 
         if cfg!(debug_assertions) {
@@ -131,7 +131,7 @@ impl<'files> Resolver<'files> {
         }
     }
 
-    fn resolve_dependencies_for_file(&mut self, file_idx: usize) -> Result<()> {
+    fn resolve_dependencies_for_file(&mut self, file_idx: usize) {
         self.begin_scope();
 
         let current_scope = self.scopes.last_mut().unwrap();
@@ -150,7 +150,6 @@ impl<'files> Resolver<'files> {
         }
 
         self.end_scope();
-        Ok(())
     }
 
     fn resolve_dependencies_for_queued(current_scope: &mut Scope, node: &mut Queued) {

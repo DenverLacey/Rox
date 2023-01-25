@@ -77,6 +77,11 @@ fn queued_ready_for_compile(queued: &Queued) -> bool {
 
     for dep in deps {
         let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
+
+        if !is_node_compilable(&dep.node) {
+            continue;
+        }
+
         if dep.progress < QueuedProgress::Compiled {
             return false;
         }
@@ -87,7 +92,7 @@ fn queued_ready_for_compile(queued: &Queued) -> bool {
 
 fn is_node_compilable(node: &Ast) -> bool {
     match node.info {
-        AstInfo::Import(_) | AstInfo::TypeSignature(_) => false,
+        AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => false,
         _ => true,
     }
 }
@@ -246,6 +251,16 @@ impl Compiler {
     fn emit_pop(&mut self, size: Size) {
         self.emit_inst(Instruction::Pop);
         self.emit_value(size);
+        self.set_stack_top(self.stack_top() - size);
+    }
+
+    fn emit_flush(&mut self, addr: Addr) {
+        let stack_top = self.stack_top();
+        if stack_top != addr {
+            self.emit_inst(Instruction::Flush);
+            self.emit_value(addr);
+            self.set_stack_top(addr);
+        }
     }
 
     fn emit_alloc(&mut self, size: Size) {
@@ -306,7 +321,7 @@ impl Compiler {
             AstInfo::TypeValue(typ) => todo!(),
             AstInfo::If(info) => self.compile_if_statement(info),
 
-            AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => Ok(()),
+            AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => unreachable!(),
         }
     }
 
@@ -673,7 +688,13 @@ impl Compiler {
             | AstBinaryKind::Div
             | AstBinaryKind::Mod => self.compile_binary_typical(kind, typ, lhs, rhs),
             AstBinaryKind::Assign => todo!(),
-            AstBinaryKind::Call => self.compile_call(typ, lhs, rhs),
+            AstBinaryKind::Call => {
+                if lhs.typ.expect("[INTERNAL ERR] lhs of `Call` node doesn't have a type.") == Type::Type {
+                   self.compile_node(rhs)
+                } else {
+                    self.compile_call(typ, lhs, rhs)
+                }
+            } 
             AstBinaryKind::Subscript => todo!(),
             AstBinaryKind::Param => {
                 panic!("[INTERNAL ERR] `Param` node not being handled by `compile_fn_decl()`.")
@@ -747,10 +768,7 @@ impl Compiler {
         }
 
         if kind == AstBlockKind::Block {
-            let size = self.stack_top() - stack_top;
-            if size != 0 {
-                self.emit_pop(size);
-            }
+            self.emit_flush(stack_top);
         }
 
         Ok(())

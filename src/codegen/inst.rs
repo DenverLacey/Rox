@@ -84,6 +84,9 @@ pub enum Instruction {
     Pop,
     // Desc:   Pops `size` bytes off the stack.
     // Schema: (size:u16) [x] -> []
+    Flush,
+    // Desc:   Sets the top of the stack to `addr`.
+    // Schema: (addr:u16) [x] -> []
     Alloc,
     // Desc:   Allocates `size` bytes on the stack and leaves it unitialized (if this area of the
     //         stack has never been used it'll be zero.)
