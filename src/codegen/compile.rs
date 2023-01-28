@@ -463,7 +463,7 @@ impl Compiler {
             }
             ScopeBinding::Fn(func) => {
                 let fn_ref = &interp.funcs[func.id.0];
-                let fn_ptr = fn_ref as *const _ as *const ();
+                let fn_ptr = fn_ref as *const _ as Pointer;
                 self.emit_ptr(fn_ptr);
 
                 size = std::mem::size_of::<Pointer>()
