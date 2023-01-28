@@ -4,8 +4,8 @@ use crate::{
     ir::{
         annotations::Annotations,
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoVar, AstUnaryKind, Queued,
-            QueuedProgress, AstInfoIf,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoVar,
+            AstUnaryKind, Queued, QueuedProgress,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -15,7 +15,7 @@ use crate::{
     },
     typing::value_type::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
-        Type,
+        Type, TypeInfo, TypeInfoStruct,
     },
     util::errors::{Result, SourceError},
 };
@@ -304,8 +304,99 @@ impl Compiler {
 
     fn patch_jump(&mut self, jump: usize) {
         let to = self.current_function().code.len();
-        let jump_size: &mut Addr = unsafe { std::mem::transmute(&mut self.current_function_mut().code[jump]) };
-        *jump_size = (to - jump - std::mem::size_of::<Addr>()).try_into().expect("[INTERNAL ERR] jump too big to fit in an `Addr`.");
+        let jump_size: &mut Addr =
+            unsafe { std::mem::transmute(&mut self.current_function_mut().code[jump]) };
+        *jump_size = (to - jump - std::mem::size_of::<Addr>())
+            .try_into()
+            .expect("[INTERNAL ERR] jump too big to fit in an `Addr`.");
+    }
+}
+
+enum FindStaticAddressResult {
+    FoundLocal(Addr),
+    FoundGlobal(Addr),
+}
+
+impl Compiler {
+    fn find_static_address(&self, node: &Ast) -> Option<FindStaticAddressResult> {
+        let interp = Interpreter::get();
+
+        match &node.info {
+            AstInfo::Literal => match &node.token.info {
+                TokenInfo::Ident(ident) => {
+                    let scope = &interp.scopes[node.scope.0];
+                    let ScopeBinding::Var(var) = scope.find_binding(ident).expect("[INTERNAL ERR] Unresolved identifier reached compilation.") else {
+                        panic!("[INTERNAL ERR] Attempt to find static address of a `Literal` node that isn't an `Ident` node.");
+                    };
+
+                    if var.is_global {
+                        Some(FindStaticAddressResult::FoundGlobal(var.addr))
+                    } else {
+                        Some(FindStaticAddressResult::FoundLocal(var.addr))
+                    }
+                }
+                _ => None,
+            },
+            AstInfo::Binary(AstBinaryKind::Subscript, lhs, rhs) => {
+                let array_addr = self.find_static_address(lhs)?;
+                todo!()
+                //         if (array_status == Find_Static_Address_Result::Not_Found ||
+                //             sub->lhs->type.kind != Value_Type_Kind::Array ||
+                //             !sub->rhs->is_constant(c))
+                //         {
+                //             status = Find_Static_Address_Result::Not_Found;
+                //             break;
+                //         }
+                //
+                //         if (array_status == Find_Static_Address_Result::Found_Global) {
+                //             status = Find_Static_Address_Result::Found_Global;
+                //         }
+                //
+                //         runtime::Int index;
+                //         c.evaluate_unchecked(sub->rhs, index);
+                //
+                //         address = array_address + index * sub->type.size();
+            }
+            AstInfo::Binary(AstBinaryKind::MemberAccess, lhs, rhs) => {
+                let lhs_type = lhs
+                    .typ
+                    .expect("[INTERNAL ERR] lhs node of `MemberAccess` node does not have a type.");
+                if lhs_type.is_pointer() {
+                    return None;
+                }
+
+                let Type::Composite(lhs_type_idx) = lhs_type else {
+                    panic!("[INTERNAL ERR] lhs's type of `MemberAccess` is not a composite type.");
+                };
+                let lhs_type = &interp.types[lhs_type_idx];
+
+                let TokenInfo::Ident(field_ident) = &rhs.token.info else {
+                    panic!("[INTERNAL ERR] rhs node of `MemberAccess` node is not an `Ident` node.");
+                };
+
+                let field_offset = if let TypeInfo::Struct(info) = lhs_type {
+                    info.offset_of(field_ident)
+                } else {
+                    panic!(
+                        "[INTERNAL ERR] lhs's type of `MemberAccess` node is not a struct type."
+                    );
+                };
+
+                let obj_addr = self.find_static_address(lhs)?;
+                match obj_addr {
+                    FindStaticAddressResult::FoundLocal(obj_addr) => {
+                        Some(FindStaticAddressResult::FoundLocal(obj_addr + field_offset))
+                    }
+                    FindStaticAddressResult::FoundGlobal(obj_addr) => Some(
+                        FindStaticAddressResult::FoundGlobal(obj_addr + field_offset),
+                    ),
+                }
+            }
+            _ => None,
+        }
+        //     case Typed_AST_Kind::Address_Of: {
+        //         todo("Implement finding the static address of constant pointer values.");
+        //     } break;
     }
 }
 
@@ -314,7 +405,7 @@ impl Compiler {
         match &node.info {
             AstInfo::Literal => self.compile_literal(node.scope, &node.token, node.typ),
             AstInfo::Unary(kind, expr) => self.compile_unary(*kind, node.typ, expr),
-            AstInfo::Binary(kind, lhs, rhs) => self.compile_binary(*kind, node.typ, lhs, rhs),
+            AstInfo::Binary(kind, lhs, rhs) => self.compile_binary(*kind, node, lhs, rhs),
             AstInfo::Block(kind, nodes) => self.compile_block(*kind, nodes),
             AstInfo::Fn(info) => self.compile_fn_decl(&node.token, info),
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
@@ -677,7 +768,7 @@ impl Compiler {
     fn compile_binary(
         &mut self,
         kind: AstBinaryKind,
-        typ: Option<Type>,
+        node: &Ast,
         lhs: &Ast,
         rhs: &Ast,
     ) -> Result<()> {
@@ -686,16 +777,46 @@ impl Compiler {
             | AstBinaryKind::Sub
             | AstBinaryKind::Mul
             | AstBinaryKind::Div
-            | AstBinaryKind::Mod => self.compile_binary_typical(kind, typ, lhs, rhs),
+            | AstBinaryKind::Mod => self.compile_binary_typical(kind, node.typ, lhs, rhs),
             AstBinaryKind::Assign => todo!(),
             AstBinaryKind::Call => {
-                if lhs.typ.expect("[INTERNAL ERR] lhs of `Call` node doesn't have a type.") == Type::Type {
-                   self.compile_node(rhs)
+                if lhs
+                    .typ
+                    .expect("[INTERNAL ERR] lhs of `Call` node doesn't have a type.")
+                    == Type::Type
+                {
+                    self.compile_node(rhs)
                 } else {
-                    self.compile_call(typ, lhs, rhs)
+                    self.compile_call(node.typ, lhs, rhs)
                 }
-            } 
+            }
             AstBinaryKind::Subscript => todo!(),
+            AstBinaryKind::MemberAccess => {
+                let find_result = self.find_static_address(node);
+                match find_result {
+                    Some(FindStaticAddressResult::FoundLocal(addr)) => {
+                        self.emit_dup(
+                            false,
+                            node.typ
+                                .expect("[INTERNAL ERR] `MemberAccess` node has no type.")
+                                .size(),
+                            addr,
+                        );
+                    }
+                    Some(FindStaticAddressResult::FoundGlobal(addr)) => {
+                        self.emit_dup(
+                            true,
+                            node.typ
+                                .expect("[INTERNAL ERR] `MemberAccess` node has no type.")
+                                .size(),
+                            addr,
+                        );
+                    }
+                    None => todo!(),
+                }
+
+                Ok(())
+            }
             AstBinaryKind::Param => {
                 panic!("[INTERNAL ERR] `Param` node not being handled by `compile_fn_decl()`.")
             }

@@ -1,15 +1,19 @@
+use std::fmt::format;
+
 use crate::{
     canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoTypeSignature, AstInfoVar,
-        AstUnaryKind, Queued, QueuedProgress, AstInfoStruct,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoStruct, AstInfoTypeSignature,
+        AstInfoVar, AstUnaryKind, Queued, QueuedProgress,
     },
-    parsing::tokenization::{Token, TokenInfo, CodeLocation},
+    parsing::tokenization::{CodeLocation, Token, TokenInfo},
     util::errors::{Result, SourceError, SourceError2},
 };
 
-use super::value_type::{Type, TypeInfo, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct, StructField};
+use super::value_type::{
+    StructField, Type, TypeInfo, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct,
+};
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
     loop {
@@ -381,7 +385,12 @@ fn typecheck_struct_decl(scope: &mut Scope, token: &Token, info: &mut AstInfoStr
 
     let struct_type = interp.create_struct_type(struct_info);
     let binding = ScopeBinding::Type(struct_type);
-    scope.add_binding(ident.clone(), binding, token.loc, format!("Redeclaration of `{}`.", ident))?;
+    scope.add_binding(
+        ident.clone(),
+        binding,
+        token.loc,
+        format!("Redeclaration of `{}`.", ident),
+    )?;
 
     Ok(())
 }
@@ -452,10 +461,20 @@ fn typecheck_node(interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
         AstInfo::If(info) => {
             typecheck_node(interp, &mut info.condition)?;
 
-            if info.condition.typ.filter(|t| matches!(*t, Type::Bool)).is_none() {
-                return Err(SourceError::new("Type mismatch!", info.condition.token.loc, "Expected a `Bool` value here.").into());
+            if info
+                .condition
+                .typ
+                .filter(|t| matches!(*t, Type::Bool))
+                .is_none()
+            {
+                return Err(SourceError::new(
+                    "Type mismatch!",
+                    info.condition.token.loc,
+                    "Expected a `Bool` value here.",
+                )
+                .into());
             }
-            
+
             typecheck_node(interp, &mut info.then_block)?;
 
             if let Some(else_block) = &mut info.else_block {
@@ -785,9 +804,9 @@ fn typecheck_binary(
                             lhs.token.loc,
                             "This isn't a callable value.",
                         )
-                            .into());
+                        .into());
                     }
-                } 
+                }
                 Some(Type::Type) => {
                     let AstInfo::TypeValue(Type::Composite(lhs_type)) = &lhs.info else {
                         panic!("[INTERNAL ERR] lhs of `Call` node is of type `Type` but is not a `TypeValue` node.");
@@ -795,15 +814,19 @@ fn typecheck_binary(
 
                     let type_info = &interp.types[*lhs_type];
                     if let TypeInfo::Struct(struct_info) = type_info {
-                        typecheck_arguments(rhs.token.loc, struct_info.fields.iter().map(|f| f.typ), args)?;
-                        return_type = lhs.typ;
+                        typecheck_arguments(
+                            rhs.token.loc,
+                            struct_info.fields.iter().map(|f| f.typ),
+                            args,
+                        )?;
+                        return_type = Some(Type::Composite(*lhs_type));
                     } else {
                         return Err(SourceError::new(
                             format!("Cannot call `{}`", Type::Composite(*lhs_type)),
                             lhs.token.loc,
                             "This isn't a callable value.",
                         )
-                            .into());
+                        .into());
                     }
                 }
                 Some(lhs_type) => {
@@ -812,7 +835,7 @@ fn typecheck_binary(
                         lhs.token.loc,
                         "This isn't a callable value.",
                     )
-                        .into());
+                    .into());
                 }
                 None => {
                     return Err(SourceError::new(
@@ -820,7 +843,7 @@ fn typecheck_binary(
                         lhs.token.loc,
                         "This isn't a callable value.",
                     )
-                        .into());
+                    .into());
                 }
             }
 
@@ -829,6 +852,34 @@ fn typecheck_binary(
         AstBinaryKind::Subscript => {
             todo!()
         }
+        AstBinaryKind::MemberAccess => {
+            typecheck_node(interp, lhs)?;
+
+            let result_type: Type;
+            match lhs
+                .typ
+                .expect("[INTERNAL ERR] lhs of `MemberAccess` node does not have a type.")
+            {
+                Type::Type => todo!(),
+                Type::Composite(idx) => {
+                    result_type =
+                        typecheck_member_access_composite(interp, idx, rhs, lhs.token.loc)?;
+                }
+                _ => {
+                    return Err(SourceError::new(
+                        "Cannot access member of this type.",
+                        lhs.token.loc,
+                        format!(
+                            "This is of type `{}` which doesn't support member access.",
+                            lhs.typ.unwrap()
+                        ),
+                    )
+                    .into())
+                }
+            }
+
+            Some(result_type)
+        }
         AstBinaryKind::Param => {
             unreachable!("`Param` nodes get special handling when typechecking functions.");
         }
@@ -836,25 +887,28 @@ fn typecheck_binary(
             unreachable!("`ConstrainedVarDeclTarget` nodes get special handling when typechecking variable declarations.");
         }
         AstBinaryKind::Field => {
-            unreachable!("`Field` nodes get special handling when typechecking struct declarations.");
+            unreachable!(
+                "`Field` nodes get special handling when typechecking struct declarations."
+            );
         }
     };
 
     Ok(typ)
 }
 
-fn typecheck_arguments(call_loc: CodeLocation, params: impl ExactSizeIterator<Item = Type>, args: &[Ast]) -> Result<()> {
+fn typecheck_arguments(
+    call_loc: CodeLocation,
+    params: impl ExactSizeIterator<Item = Type>,
+    args: &[Ast],
+) -> Result<()> {
     if params.len() != args.len() {
         if args.is_empty() {
             return Err(SourceError::new(
                 "Incorrect number of arguments.",
                 call_loc,
-                format!(
-                    "Expected {} argument(s) but was given 0.",
-                    params.len()
-                ),
+                format!("Expected {} argument(s) but was given 0.", params.len()),
             )
-                .into());
+            .into());
         } else {
             let first_bad = std::cmp::min(params.len(), args.len());
             let arg = &args[first_bad];
@@ -867,7 +921,7 @@ fn typecheck_arguments(call_loc: CodeLocation, params: impl ExactSizeIterator<It
                     args.len()
                 ),
             )
-                .into());
+            .into());
         }
     }
 
@@ -882,11 +936,58 @@ fn typecheck_arguments(call_loc: CodeLocation, params: impl ExactSizeIterator<It
                 arg.token.loc,
                 format!("Type should be `{}` but is `{}`.", expected, given),
             )
-                .into());
+            .into());
         }
     }
 
     Ok(())
+}
+
+fn typecheck_member_access_composite(
+    interp: &Interpreter,
+    composite_idx: usize,
+    member: &Ast,
+    object_location: CodeLocation,
+) -> Result<Type> {
+    let typ = &interp.types[composite_idx];
+    let result = match typ {
+        TypeInfo::Struct(info) => {
+            let TokenInfo::Ident(member_ident) = &member.token.info else {
+                panic!("[INTERNAL ERR] rhs node of `MemberAccess` node was not an `Ident` node.");
+            };
+
+            let field = info
+                .fields
+                .iter()
+                .find(|f| f.name == *member_ident)
+                .ok_or_else(|| {
+                    SourceError::new(
+                        "Unknown field",
+                        member.token.loc,
+                        format!(
+                            "There is no field `{}` for type `{}`.",
+                            member_ident,
+                            Type::Composite(composite_idx)
+                        ),
+                    )
+                })?;
+
+            field.typ
+        }
+        _ => {
+            return Err(SourceError::new(
+                "Cannot access member of this type.",
+                object_location,
+                format!(
+                    "This is of type `{}` which doesn't support member access.",
+                    Type::Composite(composite_idx),
+                ),
+            )
+            .into())
+        }
+    };
+
+    Ok(result)
 }
 
 fn typecheck_block(

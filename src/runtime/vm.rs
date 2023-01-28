@@ -413,7 +413,10 @@ impl<'exe> VM<'exe> {
                 Call_0 => {
                     let f: &FunctionInfo = self.stack.pop_value();
                     self.call(f, 0);
-                    frame = self.frames.last_mut().expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
+                    frame = self
+                        .frames
+                        .last_mut()
+                        .expect("[INTERNAL ERR] Function call did not push a `CallFrame`.");
                 }
                 CallBuiltin => {
                     let size: Size = frame.reader.read();

@@ -599,6 +599,12 @@ impl<'file> Parser<'file> {
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
             }
+            TokenInfo::Dot => {
+                self.parse_binary(AstBinaryKind::MemberAccess, token, prec, Box::new(previous))
+            }
+            TokenInfo::DotDot => {
+                todo!()
+            }
             _ => Err(error!(
                 "Encountered a non-infix token `{:?}` in infix position.",
                 token.info

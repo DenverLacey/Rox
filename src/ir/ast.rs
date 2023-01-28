@@ -54,6 +54,7 @@ pub enum AstBinaryKind {
     Param,
     ConstrainedVarDeclTarget,
     Field,
+    MemberAccess,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

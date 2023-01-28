@@ -115,7 +115,10 @@ impl<'files> Resolver<'files> {
                             panic!("[INTERNAL ERR] `ident` node of `Struct` node not an `Ident` node.");
                         };
 
-                        globals.push(Global { name: ident.clone(), queued_idx: idx });
+                        globals.push(Global {
+                            name: ident.clone(),
+                            queued_idx: idx,
+                        });
                     }
 
                     AstInfo::Literal => {}
@@ -232,7 +235,11 @@ impl<'files> Resolver<'files> {
             AstInfo::Unary(_, sub_expr) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, sub_expr)
             }
-            AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget | AstBinaryKind::Field, _, rhs) => {
+            AstInfo::Binary(
+                AstBinaryKind::ConstrainedVarDeclTarget | AstBinaryKind::Field,
+                _,
+                rhs,
+            ) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, rhs);
             }
             AstInfo::Binary(_, lhs, rhs) => {

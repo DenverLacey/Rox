@@ -1,64 +1,12 @@
-
-let y = x + 1
-let x = 1
-
-%[entry]
-fn main() {
-    foo(y)
-    XXXprint "I wanna rox and roll!"
-    XXXprint "I wanna rox and roll!"
-
-    bar()
-
-    baz()
-
-    biz()
-
-    fuzz()
-
-    if false {
-        let pos = Pos(13.0, 17.0)
-    }
-}
-
-fn foo(k: Int) {
-    XXXprint k + x
-}
-
-fn bar() {
-    let x, y = 5
-    XXXprint x * y
-} 
- 
-fn baz() {
-    let a, b = 'A', 'B'
-    XXXprint a
-    XXXprint b
-} 
-
-fn biz() {
-    let
-        int: Int,
-        bool: Bool,
-        float: Float
-
-    XXXprint int
-    XXXprint bool
-    XXXprint float
-}
-
-fn fuzz() {
-    if false {
-        XXXprint "[1] This was if."
-    } else if true {
-        XXXprint "[1] This was else if."
-    } else {
-        XXXprint "[1] This is else"
-    }
-}
-
 struct Pos {
     x: Float
     y: Float
+}
+
+%[entry]
+fn main() {
+    let pos = Pos(2.3, 5.7)
+    XXXprint pos.x
+    XXXprint pos.y
 }
 

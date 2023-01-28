@@ -129,6 +129,15 @@ pub struct TypeInfoStruct {
     pub fields: Box<[StructField]>,
 }
 
+impl TypeInfoStruct {
+    pub fn offset_of(&self, field: &str) -> Size {
+        self.fields
+            .iter()
+            .take_while(|f| f.name != field)
+            .fold(0, |acc, f| acc + f.typ.size())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct StructField {
     pub name: String,

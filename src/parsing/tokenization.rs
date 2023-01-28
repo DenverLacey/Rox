@@ -75,6 +75,8 @@ pub enum TokenInfo {
     Bang,
     Equal,
     Ampersand,
+    Dot,
+    DotDot,
 
     // Keywords
     Import,
@@ -116,6 +118,8 @@ impl TokenInfo {
             TokenInfo::Bang => TokenPrecedence::Unary,
             TokenInfo::Equal => TokenPrecedence::None,
             TokenInfo::Ampersand => TokenPrecedence::BitAnd,
+            TokenInfo::Dot => TokenPrecedence::Call,
+            TokenInfo::DotDot => TokenPrecedence::Range,
             TokenInfo::Import => TokenPrecedence::None,
             TokenInfo::Let => TokenPrecedence::None,
             TokenInfo::Mut => TokenPrecedence::None,
@@ -156,6 +160,8 @@ impl Display for TokenInfo {
             TokenInfo::Bang => write!(f, "!"),
             TokenInfo::Equal => write!(f, "="),
             TokenInfo::Ampersand => write!(f, "&"),
+            TokenInfo::Dot => write!(f, "."),
+            TokenInfo::DotDot => write!(f, ".."),
             TokenInfo::Import => write!(f, "import"),
             TokenInfo::Let => write!(f, "let"),
             TokenInfo::Mut => write!(f, "mut"),
@@ -521,6 +527,13 @@ impl<'file> Tokenizer<'file> {
             '!' => TokenInfo::Bang,
             '=' => TokenInfo::Equal,
             '&' => TokenInfo::Ampersand,
+            '.' => {
+                if self.match_char('.') {
+                    TokenInfo::DotDot
+                } else {
+                    TokenInfo::Dot
+                }
+            }
 
             _ => {
                 return Err(SourceError::new(
