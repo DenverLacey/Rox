@@ -15,7 +15,7 @@ use crate::{
     },
     typing::value_type::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
-        Type, TypeInfo, TypeInfoStruct,
+        Type, TypeInfo,
     },
     util::errors::{Result, SourceError},
 };
@@ -237,6 +237,17 @@ impl Compiler {
         self.emit_value(idx);
     }
 
+    fn emit_move_imm(&mut self, global: bool, size: Size, addr: Addr) {
+        if global {
+            self.emit_inst(Instruction::MoveImmGlobal);
+        } else {
+            self.emit_inst(Instruction::MoveImm);
+        }
+
+        self.emit_value(size);
+        self.emit_value(addr);
+    }
+
     fn emit_dup(&mut self, global: bool, size: Size, addr: Addr) {
         if global {
             self.emit_inst(Instruction::DupGlobal);
@@ -312,9 +323,9 @@ impl Compiler {
     }
 }
 
-enum FindStaticAddressResult {
-    FoundLocal(Addr),
-    FoundGlobal(Addr),
+struct FindStaticAddressResult {
+    addr: Addr,
+    is_global: bool,
 }
 
 impl Compiler {
@@ -330,9 +341,15 @@ impl Compiler {
                     };
 
                     if var.is_global {
-                        Some(FindStaticAddressResult::FoundGlobal(var.addr))
+                        Some(FindStaticAddressResult {
+                            addr: var.addr,
+                            is_global: true,
+                        })
                     } else {
-                        Some(FindStaticAddressResult::FoundLocal(var.addr))
+                        Some(FindStaticAddressResult {
+                            addr: var.addr,
+                            is_global: false,
+                        })
                     }
                 }
                 _ => None,
@@ -383,14 +400,7 @@ impl Compiler {
                 };
 
                 let obj_addr = self.find_static_address(lhs)?;
-                match obj_addr {
-                    FindStaticAddressResult::FoundLocal(obj_addr) => {
-                        Some(FindStaticAddressResult::FoundLocal(obj_addr + field_offset))
-                    }
-                    FindStaticAddressResult::FoundGlobal(obj_addr) => Some(
-                        FindStaticAddressResult::FoundGlobal(obj_addr + field_offset),
-                    ),
-                }
+                Some(FindStaticAddressResult { addr: obj_addr.addr + field_offset, ..obj_addr })
             }
             _ => None,
         }
@@ -778,7 +788,21 @@ impl Compiler {
             | AstBinaryKind::Mul
             | AstBinaryKind::Div
             | AstBinaryKind::Mod => self.compile_binary_typical(kind, node.typ, lhs, rhs),
-            AstBinaryKind::Assign => todo!(),
+            AstBinaryKind::Assign => {
+                match self.find_static_address(lhs) {
+                    Some(FindStaticAddressResult {
+                        addr,
+                        is_global,
+                    }) => {
+                        let size = lhs.typ.expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.").size();
+
+                        self.compile_node(rhs)?;
+                        self.emit_move_imm(is_global, size, addr);
+                        Ok(())
+                    }
+                    _ => todo!("assignment to non-static destination."),
+                }
+            }
             AstBinaryKind::Call => {
                 if lhs
                     .typ
@@ -794,25 +818,19 @@ impl Compiler {
             AstBinaryKind::MemberAccess => {
                 let find_result = self.find_static_address(node);
                 match find_result {
-                    Some(FindStaticAddressResult::FoundLocal(addr)) => {
+                    Some(FindStaticAddressResult {
+                        addr,
+                        is_global,
+                    }) => {
                         self.emit_dup(
-                            false,
+                            is_global,
                             node.typ
                                 .expect("[INTERNAL ERR] `MemberAccess` node has no type.")
                                 .size(),
                             addr,
                         );
                     }
-                    Some(FindStaticAddressResult::FoundGlobal(addr)) => {
-                        self.emit_dup(
-                            true,
-                            node.typ
-                                .expect("[INTERNAL ERR] `MemberAccess` node has no type.")
-                                .size(),
-                            addr,
-                        );
-                    }
-                    None => todo!(),
+                    _ => todo!(),
                 }
 
                 Ok(())

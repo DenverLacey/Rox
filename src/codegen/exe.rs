@@ -261,6 +261,11 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Move {}b", inst_idx, size * 8);
             }
+            MoveImm | MoveImmGlobal => {
+                let size: Size = reader.read();
+                let addr: Addr = reader.read();
+                println!("{:04X}: {:?} [{}] {}b", inst_idx, inst, addr, size * 8);
+            }
             Dup => {
                 let size: Size = reader.read();
                 let addr: Addr = reader.read();

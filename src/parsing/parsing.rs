@@ -543,7 +543,7 @@ impl<'file> Parser<'file> {
                 Ok(node)
             }
             TokenInfo::Bang => self.parse_unary(AstUnaryKind::Not, token),
-            TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token),
+            TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token), // @TODO: Precompute negative numbers
             TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
             TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
             TokenInfo::Fn => self.parse_fn_type_signature(token),

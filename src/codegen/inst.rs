@@ -68,6 +68,12 @@ pub enum Instruction {
     Move,
     // Desc:   Copies the bytes of p to q
     // Schema: (size:u16) [p[size], q[size]] -> []
+    MoveImm,
+    // Desc:   Pops `size` bytes off the stack and copies it into `addr`
+    // Scehma: (size:u16, addr:u16) [dest[size], ..., src[size]] -> [src[size], ...]
+    MoveImmGlobal,
+    // Desc:   Same as `MoveImm` but `addr` is global.
+    // Scehma: (size:u16, addr:u16) [dest[size], ..., src[size]] -> [src[size], ...]
     Dup,
     // Desc:   Pushes a duplicate of `x` to the top of the stack. `x` is located at `addr` and is
     //         `size` bytes large.

@@ -110,6 +110,17 @@ impl Stack {
         data
     }
 
+    pub fn insert(&self, addr: Addr, data: &[u8]) {
+        let me = unsafe { &mut *self.inner.get() };
+        let addr = addr as usize;
+
+        let dst = me.buffer.get_mut(addr..addr + data.len()).expect("Stack overflow.");
+        
+        for i in 0..dst.len() {
+            dst[i] = data[i];
+        }
+    }
+
     pub fn push_value<T>(&self, value: T)
     where
         T: Copy + Sized,
@@ -327,6 +338,15 @@ impl<'exe> VM<'exe> {
 
                 // Stack Operations
                 Move => todo!(),
+                MoveImm => {
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
+                    let data = self.stack.pop(size);
+                    self.stack.insert(addr + frame.stack_bottom, data);
+                }
+                MoveImmGlobal => {
+                    todo!()
+                }
                 Dup => {
                     let size: Size = frame.reader.read();
                     let addr: Addr = frame.reader.read();

@@ -8,5 +8,9 @@ fn main() {
     let pos = Pos(2.3, 5.7)
     XXXprint pos.x
     XXXprint pos.y
-}
 
+    pos.x = -pos.x
+    pos.y = -pos.y
+    XXXprint pos.x
+    XXXprint pos.y
+}

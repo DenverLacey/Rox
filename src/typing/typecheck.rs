@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use crate::{
     canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
