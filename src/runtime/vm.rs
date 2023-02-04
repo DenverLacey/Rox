@@ -373,20 +373,6 @@ impl<'exe> VM<'exe> {
                     let src = unsafe { std::slice::from_raw_parts(p as *mut u8, size as usize) };
                     self.stack.push(src);
                 }
-                LoadImm => {
-                    let size: Size = frame.reader.read();
-                    let addr: Addr = frame.reader.read();
-
-                    let src = self.stack.get(size, addr + frame.stack_bottom);
-                    self.stack.push(src);
-                }
-                LoadImmGlobal => {
-                    let size: Size = frame.reader.read();
-                    let addr: Addr = frame.reader.read();
-
-                    let src = self.stack.get(size, addr);
-                    self.stack.push(src);
-                }
                 PushPtr => {
                     let addr: Addr = frame.reader.read();
                     let ptr = &self.stack.get_buffer()[(addr + frame.stack_bottom) as usize];

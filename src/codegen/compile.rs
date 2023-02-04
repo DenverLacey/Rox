@@ -279,17 +279,6 @@ impl Compiler {
         self.emit_value(size);
     }
 
-    fn emit_load_imm(&mut self, global: bool, size: Size, addr: Addr) {
-        if global {
-            self.emit_inst(Instruction::LoadImmGlobal);
-        } else {
-            self.emit_inst(Instruction::LoadImm);
-        }
-
-        self.emit_value(size);
-        self.emit_value(addr);
-    }
-
     fn emit_pop(&mut self, size: Size) {
         self.emit_inst(Instruction::Pop);
         self.emit_value(size);

@@ -280,11 +280,6 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 println!("{:04X}: Load {}b", inst_idx, size * 8);
             }
-            LoadImm | LoadImmGlobal => {
-                let size: Size = reader.read();
-                let ptr: Pointer = reader.read();
-                println!("{:04X}: {:?} {}b {:?}", inst_idx, inst, size * 8, ptr);
-            }
             PushPtr | PushPtrGlobal => {
                 let addr: Addr = reader.read();
                 println!("{:04X}: {:?} [{}]", inst_idx, inst, addr);

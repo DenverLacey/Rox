@@ -84,12 +84,6 @@ pub enum Instruction {
     Load,
     // Desc:   Pushes the value pointed to by `p` onto the stack.
     // Scehma: (size:u16) [p] -> [*p]
-    LoadImm,
-    // Desc:   Pushes the value pointed to by `p` onto the stack.
-    // Schema: (size:u16, p:u16) [] -> [*p]
-    LoadImmGlobal,
-    // Desc:   Same as `LoadImm` but `p` is not offset by the current `CallFrame`.
-    // Schema: (size:u16, p:u16) [] -> [*p]
     PushPtr,
     // Desc:   Converts `addr` into a pointer and then pushes that pointer onto the stack.
     // Scehma: (addr:u16) [] -> [addr as pointer]
