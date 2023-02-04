@@ -115,10 +115,7 @@ impl Stack {
         let addr = addr as usize;
 
         let dst = me.buffer.get_mut(addr..addr + data.len()).expect("Stack overflow.");
-        
-        for i in 0..dst.len() {
-            dst[i] = data[i];
-        }
+        dst.copy_from_slice(data);
     }
 
     pub fn push_value<T>(&self, value: T)
@@ -337,7 +334,14 @@ impl<'exe> VM<'exe> {
                 Float_Ge => bin_op!(Float, Float, Bool, >=, self),
 
                 // Stack Operations
-                Move => todo!(),
+                Move => {
+                    let size: Size = frame.reader.read();
+                    let dst: Pointer = self.stack.pop_value();
+                    let src = self.stack.pop(size);
+
+                    let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, size as usize) };
+                    dst.copy_from_slice(src);
+                }
                 MoveImm => {
                     let size: Size = frame.reader.read();
                     let addr: Addr = frame.reader.read();
@@ -345,7 +349,10 @@ impl<'exe> VM<'exe> {
                     self.stack.insert(addr + frame.stack_bottom, data);
                 }
                 MoveImmGlobal => {
-                    todo!()
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
+                    let data = self.stack.pop(size);
+                    self.stack.insert(addr, data);
                 }
                 Dup => {
                     let size: Size = frame.reader.read();
@@ -359,8 +366,39 @@ impl<'exe> VM<'exe> {
                     let data = self.stack.get(size, addr);
                     self.stack.push(data);
                 }
-                PushPtr => todo!(),
-                PushPtrGlobal => todo!(),
+                Load => {
+                    let size: Size = frame.reader.read();
+                    let p: Pointer = self.stack.pop_value();
+
+                    let src = unsafe { std::slice::from_raw_parts(p as *mut u8, size as usize) };
+                    self.stack.push(src);
+                }
+                LoadImm => {
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
+
+                    let src = self.stack.get(size, addr + frame.stack_bottom);
+                    self.stack.push(src);
+                }
+                LoadImmGlobal => {
+                    let size: Size = frame.reader.read();
+                    let addr: Addr = frame.reader.read();
+
+                    let src = self.stack.get(size, addr);
+                    self.stack.push(src);
+                }
+                PushPtr => {
+                    let addr: Addr = frame.reader.read();
+                    let ptr = &self.stack.get_buffer()[(addr + frame.stack_bottom) as usize];
+                    let ptr = ptr as *const u8 as Pointer;
+                    self.stack.push_value(ptr);
+                }
+                PushPtrGlobal => {
+                    let addr: Addr = frame.reader.read();
+                    let ptr = &self.stack.get_buffer()[addr as usize];
+                    let ptr = ptr as *const u8 as Pointer;
+                    self.stack.push_value(ptr);
+                }
                 Pop => {
                     let size: Size = frame.reader.read();
                     self.stack.pop(size);

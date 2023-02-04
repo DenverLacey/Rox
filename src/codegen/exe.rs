@@ -276,15 +276,18 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let addr: Addr = reader.read();
                 println!("{:04X}: DupGlobal [{}] {}b", inst_idx, addr, size * 8);
             }
-            PushPtr => {
+            Load => {
                 let size: Size = reader.read();
-                let ptr: Pointer = reader.read();
-                println!("{:04X}: PushPtr {}b {:?}", inst_idx, size * 8, ptr);
+                println!("{:04X}: Load {}b", inst_idx, size * 8);
             }
-            PushPtrGlobal => {
+            LoadImm | LoadImmGlobal => {
                 let size: Size = reader.read();
                 let ptr: Pointer = reader.read();
-                println!("{:04X}: PushPtrGlobal {}b {:?}", inst_idx, size * 8, ptr);
+                println!("{:04X}: {:?} {}b {:?}", inst_idx, inst, size * 8, ptr);
+            }
+            PushPtr | PushPtrGlobal => {
+                let addr: Addr = reader.read();
+                println!("{:04X}: {:?} [{}]", inst_idx, inst, addr);
             }
             Pop => {
                 let size: Size = reader.read();

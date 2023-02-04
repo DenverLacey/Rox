@@ -20,7 +20,7 @@ pub enum Instruction {
     // respectively.
     PushConst,     // (size:u16, idx:const<C>) [] -> [C]
     PushConst_Str, // (idx:const<S>) [] -> [S]
-
+    
     // Arithmetic
     Int_Add, // () [m, n] -> [m+n]
     Int_Sub, // () [m, n] -> [m-n]
@@ -81,12 +81,21 @@ pub enum Instruction {
     DupGlobal,
     // Desc:   Same as `Dup` but the addr is not offset by the current `CallFrame`.
     // Schema: (size:u16, addr:u16) [x, ...] -> [x, ..., x]
-    PushPtr,
+    Load,
+    // Desc:   Pushes the value pointed to by `p` onto the stack.
+    // Scehma: (size:u16) [p] -> [*p]
+    LoadImm,
     // Desc:   Pushes the value pointed to by `p` onto the stack.
     // Schema: (size:u16, p:u16) [] -> [*p]
-    PushPtrGlobal,
-    // Desc:   Same as `PushPtr` but `p` is not offset by the current `CallFrame`.
+    LoadImmGlobal,
+    // Desc:   Same as `LoadImm` but `p` is not offset by the current `CallFrame`.
     // Schema: (size:u16, p:u16) [] -> [*p]
+    PushPtr,
+    // Desc:   Converts `addr` into a pointer and then pushes that pointer onto the stack.
+    // Scehma: (addr:u16) [] -> [addr as pointer]
+    PushPtrGlobal,
+    // Desc:   Same as `PushPtr` but `addr` isn't offset by the current `CallFrame`.
+    // Scehma: (addr:u16) [] -> [addr as pointer]
     Pop,
     // Desc:   Pops `size` bytes off the stack.
     // Schema: (size:u16) [x] -> []

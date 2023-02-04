@@ -1,16 +1,10 @@
-struct Pos {
-    x: Float
-    y: Float
-}
-
 %[entry]
 fn main() {
-    let pos = Pos(2.3, 5.7)
-    XXXprint pos.x
-    XXXprint pos.y
+    let x = 5
+    XXXprint x
 
-    pos.x = -pos.x
-    pos.y = -pos.y
-    XXXprint pos.x
-    XXXprint pos.y
+    let p = &x
+    *p = 9
+    XXXprint x
 }
+
