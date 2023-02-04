@@ -5,7 +5,7 @@
 
 let y = x + 1
 let x = 1
-let p: &Int = &y
+# let p: &Int = &y
 
 %[entry]
 fn main() {
@@ -13,18 +13,19 @@ fn main() {
   let x = 1
 #  let y, z = 5
 #  mut u, v = 1, 4
-  foo()
+  # foo()
   let sum = add(4, 9)
   XXXprint negative
 }
 
-fn foo() {
-  XXXprint "This is a dependency"
-  main()
-}
+# FIXME: This causes an infinite loop in the compiler
+# fn foo() {
+#   XXXprint "This is a dependency"
+#   let func = main
+# } 
 
 fn add(a: Int, b: Int): Int {
-  a + b
+  return a + b
 }
 
 fn swap(a: &Int, b: &Int) {
@@ -34,13 +35,13 @@ fn swap(a: &Int, b: &Int) {
 }
 
 fn map(n: Int, f: fn(Int): Int): Int {
-  f(n)
+  return f(n)
 }
 
 let negative = map(1, negate)
 
 fn negate(n: Int): Int {
-  -n
+  return -n
 }
 
 # These are examples of circular dependencies

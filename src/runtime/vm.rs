@@ -194,7 +194,7 @@ impl<'exe> VM<'exe> {
         self.run_global_scope()?;
         if cfg!(debug_assertions) {
             println!("Stack after global scope run:");
-            self.print_stack(&[Type::Int, Type::Int]);
+            self.print_stack(&[Type::Int, Type::Int, Type::Int]);
             println!();
         }
 

@@ -2,8 +2,22 @@
 fn main() {
     let x = mul(3, 5)
     XXXprint x
+
+    let a, b = 10, 20
+    XXXprint a
+    XXXprint b
+
+    swap(&a, &b)
+    XXXprint a
+    XXXprint b
 }
 
 fn mul(a: Int, b: Int): Int {
     return a * b
+}
+
+fn swap(a: &Int, b: &Int) {
+    let t = *a
+    *a = *b
+    *b = t
 }

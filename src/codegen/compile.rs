@@ -441,17 +441,17 @@ impl Compiler {
         //     } break;
     }
 
-    fn compile_dynamic_addr_code(&mut self, node: &Ast) -> Result<()> {
+    fn compile_addr_code(&mut self, node: &Ast) -> Result<()> {
         if let Some(FindStaticAddressResult { addr, is_global }) = self.find_static_address(node) {
             self.emit_push_ptr(is_global, addr);
         } else {
-            self.compile_dynamic_addr_code_no_static(node)?;
+            self.compile_dynamic_addr_code(node)?;
         }
 
         Ok(())
     }
 
-    fn compile_dynamic_addr_code_no_static(&mut self, node: &Ast) -> Result<bool> {
+    fn compile_dynamic_addr_code(&mut self, node: &Ast) -> Result<bool> {
         let interp = Interpreter::get();
 
         match &node.info {
@@ -512,7 +512,7 @@ impl Compiler {
                 if lhs_type.is_pointer() {
                     self.compile_node(lhs)?;
                 } else {
-                    self.compile_dynamic_addr_code(lhs)?;
+                    self.compile_addr_code(lhs)?;
                 }
 
                 let Type::Composite(lhs_type_idx) = lhs_type else {
@@ -890,10 +890,24 @@ impl Compiler {
             AstUnaryKind::Neg | AstUnaryKind::Not | AstUnaryKind::XXXPrint => {
                 self.compile_unary_typical(kind, typ, expr)
             }
-            AstUnaryKind::Ref | AstUnaryKind::RefMut => self.compile_dynamic_addr_code(expr),
-            AstUnaryKind::Deref => {
+            AstUnaryKind::Ref | AstUnaryKind::RefMut => {
+                let stack_top = self.stack_top();
                 let size = typ.map_or(0, |t| t.size());
+
+                self.compile_addr_code(expr)?;
+
+                self.set_stack_top(stack_top + size);
+                Ok(())
+            }
+            AstUnaryKind::Deref => {
+                let stack_top = self.stack_top();
+                let size = typ.map_or(0, |t| t.size());
+
+                // @TODO: Check for static stuff
+                self.compile_node(expr)?;
                 self.emit_load(size);
+
+                self.set_stack_top(stack_top + size);
                 Ok(())
             }
         }
@@ -976,7 +990,7 @@ impl Compiler {
                         .size();
 
                     self.compile_node(rhs)?;
-                    self.compile_dynamic_addr_code_no_static(lhs)?;
+                    self.compile_dynamic_addr_code(lhs)?;
                     self.emit_move(size);
 
                     Ok(())
@@ -1011,7 +1025,7 @@ impl Compiler {
                             .typ
                             .expect("[INTERNAL ERR] `lhs` of `MemberAccess` node has no type.")
                             .size();
-                        self.compile_dynamic_addr_code_no_static(lhs)?;
+                        self.compile_dynamic_addr_code(lhs)?;
                         self.emit_load(size);
                     }
                 }
