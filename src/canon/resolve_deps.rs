@@ -124,6 +124,7 @@ impl<'files> Resolver<'files> {
                     AstInfo::Literal => {}
                     AstInfo::Unary(_, _) => {}
                     AstInfo::Binary(_, _, _) => {}
+                    AstInfo::Optional(_, _) => {}
                     AstInfo::Block(_, _) => {}
                     AstInfo::Import(_) => {}
                     AstInfo::TypeValue(_) => unreachable!(),
@@ -199,6 +200,7 @@ impl<'files> Resolver<'files> {
             AstInfo::Literal => {}
             AstInfo::Unary(_, _) => {}
             AstInfo::Binary(_, _, _) => {}
+            AstInfo::Optional(_, _) => {}
             AstInfo::Block(_, _) => {}
             AstInfo::Import(_) => {}
             AstInfo::TypeValue(_) => unreachable!(),
@@ -245,6 +247,11 @@ impl<'files> Resolver<'files> {
             AstInfo::Binary(_, lhs, rhs) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, lhs);
                 Self::resolve_dependencies_for_node(current_scope, deps, rhs);
+            }
+            AstInfo::Optional(_, sub_expr) => {
+                if let Some(expr) = sub_expr {
+                    Self::resolve_dependencies_for_node(current_scope, deps, expr);
+                }
             }
             AstInfo::Block(_, nodes) => {
                 Self::resolve_dependencies_for_nodes(current_scope, deps, nodes)

@@ -1,10 +1,9 @@
 %[entry]
 fn main() {
-    let x = 5
-    XXXprint x
-
-    let p = &x
-    *p = 9
+    let x = mul(3, 5)
     XXXprint x
 }
 
+fn mul(a: Int, b: Int): Int {
+    return a * b
+}

@@ -87,6 +87,7 @@ pub enum TokenInfo {
     If,
     Else,
     Struct,
+    Return,
 
     XXXPrint,
 }
@@ -128,6 +129,7 @@ impl TokenInfo {
             TokenInfo::If => TokenPrecedence::None,
             TokenInfo::Else => TokenPrecedence::None,
             TokenInfo::Struct => TokenPrecedence::None,
+            TokenInfo::Return => TokenPrecedence::None,
             TokenInfo::XXXPrint => TokenPrecedence::None,
         }
     }
@@ -170,6 +172,7 @@ impl Display for TokenInfo {
             TokenInfo::If => write!(f, "if"),
             TokenInfo::Else => write!(f, "else"),
             TokenInfo::Struct => write!(f, "struct"),
+            TokenInfo::Return => write!(f, "return"),
             TokenInfo::XXXPrint => write!(f, "XXXprint"),
         }
     }
@@ -497,6 +500,7 @@ impl<'file> Tokenizer<'file> {
             "if" => Token::new(tok_loc, TokenInfo::If),
             "else" => Token::new(tok_loc, TokenInfo::Else),
             "struct" => Token::new(tok_loc, TokenInfo::Struct),
+            "return" => Token::new(tok_loc, TokenInfo::Return),
             "XXXprint" => Token::new(tok_loc, TokenInfo::XXXPrint),
             _ => Token::new(tok_loc, TokenInfo::Ident(word)),
         }

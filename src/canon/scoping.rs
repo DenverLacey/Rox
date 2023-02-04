@@ -169,6 +169,11 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(current_scope, lhs.as_mut())?;
                 self.establish_scope_for_node(current_scope, rhs.as_mut())?;
             }
+            AstInfo::Optional(_, sub_node) => {
+                if let Some(expr) = sub_node {
+                    self.establish_scope_for_node(current_scope, expr)?;
+                }
+            }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
                 let new_scope = self.push_scope(current_scope);
                 self.establish_scope_for_nodes(new_scope, sub_nodes.iter_mut())?;

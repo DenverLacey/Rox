@@ -5,7 +5,7 @@ use crate::{
         annotations::Annotations,
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoVar,
-            AstUnaryKind, Queued, QueuedProgress,
+            AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -341,6 +341,15 @@ impl Compiler {
             .try_into()
             .expect("[INTERNAL ERR] jump too big to fit in an `Addr`.");
     }
+
+    fn emit_return(&mut self, size: Size) {
+        if size == 0 {
+            self.emit_inst(Instruction::Ret_0);
+        } else {
+            self.emit_inst(Instruction::Ret);
+            self.emit_value(size);
+        }
+    }
 }
 
 struct FindStaticAddressResult {
@@ -420,7 +429,10 @@ impl Compiler {
                 };
 
                 let obj_addr = self.find_static_address(lhs)?;
-                Some(FindStaticAddressResult { addr: obj_addr.addr + field_offset, ..obj_addr })
+                Some(FindStaticAddressResult {
+                    addr: obj_addr.addr + field_offset,
+                    ..obj_addr
+                })
             }
             _ => None,
         }
@@ -461,40 +473,42 @@ impl Compiler {
                     Ok(true)
                 }
                 _ => Ok(false),
-            }
+            },
             AstInfo::Unary(AstUnaryKind::Deref, sub_node) => {
                 self.compile_node(sub_node)?;
                 Ok(true)
             }
             AstInfo::Binary(AstBinaryKind::Subscript, lhs, rhs) => {
                 todo!()
-    //     case Typed_AST_Kind::Subscript: {
-    //         auto sub = dynamic_cast<Typed_AST_Binary *>(&node);
-    //         internal_verify(sub, "Failed to cast node to Binary* in emit_dynamic_address_code().");
-    //         
-    //         Size element_size = sub->lhs->type.child_type()->size();
-    //         
-    //         if (!emit_address_code(c, *sub->lhs)) {
-    //             return false;
-    //         }
-    //         
-    //         if (sub->lhs->type.kind == Value_Type_Kind::Slice) {
-    //             c.emit_opcode(Opcode::Load);
-    //             c.emit_size(value_types::Ptr.size());
-    //         }
-    //         
-    //         // offset = rhs * element_size
-    //         sub->rhs->compile(c);
-    //         c.emit_opcode(Opcode::Lit_Int);
-    //         c.emit_value<runtime::Int>(element_size);
-    //         c.emit_opcode(Opcode::Int_Mul);
-    //         
-    //         // address = &lhs + offset
-    //         c.emit_opcode(Opcode::Int_Add);
-    //     } break;
+                //     case Typed_AST_Kind::Subscript: {
+                //         auto sub = dynamic_cast<Typed_AST_Binary *>(&node);
+                //         internal_verify(sub, "Failed to cast node to Binary* in emit_dynamic_address_code().");
+                //
+                //         Size element_size = sub->lhs->type.child_type()->size();
+                //
+                //         if (!emit_address_code(c, *sub->lhs)) {
+                //             return false;
+                //         }
+                //
+                //         if (sub->lhs->type.kind == Value_Type_Kind::Slice) {
+                //             c.emit_opcode(Opcode::Load);
+                //             c.emit_size(value_types::Ptr.size());
+                //         }
+                //
+                //         // offset = rhs * element_size
+                //         sub->rhs->compile(c);
+                //         c.emit_opcode(Opcode::Lit_Int);
+                //         c.emit_value<runtime::Int>(element_size);
+                //         c.emit_opcode(Opcode::Int_Mul);
+                //
+                //         // address = &lhs + offset
+                //         c.emit_opcode(Opcode::Int_Add);
+                //     } break;
             }
             AstInfo::Binary(AstBinaryKind::MemberAccess, lhs, rhs) => {
-                let lhs_type = lhs.typ.expect("[INTERNAL ERR] `lhs` of `MemberAccess` node does not have a type.");
+                let lhs_type = lhs
+                    .typ
+                    .expect("[INTERNAL ERR] `lhs` of `MemberAccess` node does not have a type.");
                 if lhs_type.is_pointer() {
                     self.compile_node(lhs)?;
                 } else {
@@ -524,38 +538,38 @@ impl Compiler {
             }
             _ => Ok(false),
         }
-    // switch (node.kind) {
-    //     case Typed_AST_Kind::Negative_Subscript: {
-    //         auto sub = dynamic_cast<Typed_AST_Binary *>(&node);
-    //         internal_verify(sub, "Failed to cast node to Binary* in emit_dynamic_address_code().");
-    //         internal_verify(sub->lhs->type.kind == Value_Type_Kind::Slice, "sub->lhs is not a slice in Negative_Subscript part of emit_dynamic_address_code().");
-    //         
-    //         Size element_size = sub->type.size();
-    //         runtime::Int index = -sub->rhs.cast<Typed_AST_Int>()->value;
-    //         
-    //         // (data, count) = result of compiling lhs
-    //         sub->lhs->compile(c);
-    //         
-    //         // offset = (count - index) * element_size
-    //         c.emit_opcode(Opcode::Lit_Int);
-    //         c.emit_value<runtime::Int>(index);
-    //         
-    //         c.emit_opcode(Opcode::Int_Sub);
-    //         
-    //         c.emit_opcode(Opcode::Lit_Int);
-    //         c.emit_value<runtime::Int>(element_size);
-    //         
-    //         c.emit_opcode(Opcode::Int_Mul);
-    //         
-    //         // element_ptr = data + offset
-    //         c.emit_opcode(Opcode::Int_Add);
-    //     } break;
-    //         
-    //     default:
-    //         return false;
-    // }
-    // 
-    // return true;
+        // switch (node.kind) {
+        //     case Typed_AST_Kind::Negative_Subscript: {
+        //         auto sub = dynamic_cast<Typed_AST_Binary *>(&node);
+        //         internal_verify(sub, "Failed to cast node to Binary* in emit_dynamic_address_code().");
+        //         internal_verify(sub->lhs->type.kind == Value_Type_Kind::Slice, "sub->lhs is not a slice in Negative_Subscript part of emit_dynamic_address_code().");
+        //
+        //         Size element_size = sub->type.size();
+        //         runtime::Int index = -sub->rhs.cast<Typed_AST_Int>()->value;
+        //
+        //         // (data, count) = result of compiling lhs
+        //         sub->lhs->compile(c);
+        //
+        //         // offset = (count - index) * element_size
+        //         c.emit_opcode(Opcode::Lit_Int);
+        //         c.emit_value<runtime::Int>(index);
+        //
+        //         c.emit_opcode(Opcode::Int_Sub);
+        //
+        //         c.emit_opcode(Opcode::Lit_Int);
+        //         c.emit_value<runtime::Int>(element_size);
+        //
+        //         c.emit_opcode(Opcode::Int_Mul);
+        //
+        //         // element_ptr = data + offset
+        //         c.emit_opcode(Opcode::Int_Add);
+        //     } break;
+        //
+        //     default:
+        //         return false;
+        // }
+        //
+        // return true;
     }
 }
 
@@ -565,6 +579,9 @@ impl Compiler {
             AstInfo::Literal => self.compile_literal(node.scope, &node.token, node.typ),
             AstInfo::Unary(kind, expr) => self.compile_unary(*kind, node.typ, expr),
             AstInfo::Binary(kind, lhs, rhs) => self.compile_binary(*kind, node, lhs, rhs),
+            AstInfo::Optional(kind, expr) => {
+                self.compile_optional(*kind, expr.as_ref().map(|e| e.as_ref()))
+            }
             AstInfo::Block(kind, nodes) => self.compile_block(*kind, nodes),
             AstInfo::Fn(info) => self.compile_fn_decl(&node.token, info),
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
@@ -941,29 +958,30 @@ impl Compiler {
             | AstBinaryKind::Mul
             | AstBinaryKind::Div
             | AstBinaryKind::Mod => self.compile_binary_typical(kind, node.typ, lhs, rhs),
-            AstBinaryKind::Assign => {
-                match self.find_static_address(lhs) {
-                    Some(FindStaticAddressResult {
-                        addr,
-                        is_global,
-                    }) => {
-                        let size = lhs.typ.expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.").size();
+            AstBinaryKind::Assign => match self.find_static_address(lhs) {
+                Some(FindStaticAddressResult { addr, is_global }) => {
+                    let size = lhs
+                        .typ
+                        .expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.")
+                        .size();
 
-                        self.compile_node(rhs)?;
-                        self.emit_move_imm(is_global, size, addr);
-                        Ok(())
-                    }
-                    _ => {
-                        let size = lhs.typ.expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.").size();
-
-                        self.compile_node(rhs)?;
-                        self.compile_dynamic_addr_code_no_static(lhs)?;
-                        self.emit_move(size);
-
-                        Ok(())
-                    }
+                    self.compile_node(rhs)?;
+                    self.emit_move_imm(is_global, size, addr);
+                    Ok(())
                 }
-            }
+                _ => {
+                    let size = lhs
+                        .typ
+                        .expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.")
+                        .size();
+
+                    self.compile_node(rhs)?;
+                    self.compile_dynamic_addr_code_no_static(lhs)?;
+                    self.emit_move(size);
+
+                    Ok(())
+                }
+            },
             AstBinaryKind::Call => {
                 if lhs
                     .typ
@@ -979,10 +997,7 @@ impl Compiler {
             AstBinaryKind::MemberAccess => {
                 let find_result = self.find_static_address(node);
                 match find_result {
-                    Some(FindStaticAddressResult {
-                        addr,
-                        is_global,
-                    }) => {
+                    Some(FindStaticAddressResult { addr, is_global }) => {
                         self.emit_dup(
                             is_global,
                             node.typ
@@ -992,7 +1007,10 @@ impl Compiler {
                         );
                     }
                     _ => {
-                        let size = lhs.typ.expect("[INTERNAL ERR] `lhs` of `MemberAccess` node has no type.").size();
+                        let size = lhs
+                            .typ
+                            .expect("[INTERNAL ERR] `lhs` of `MemberAccess` node has no type.")
+                            .size();
                         self.compile_dynamic_addr_code_no_static(lhs)?;
                         self.emit_load(size);
                     }
@@ -1060,6 +1078,29 @@ impl Compiler {
 
         let size = return_type.map_or(0, |t| t.size());
         self.set_stack_top(stack_top_before_args + size);
+
+        Ok(())
+    }
+
+    fn compile_optional(&mut self, kind: AstOptionalKind, expr: Option<&Ast>) -> Result<()> {
+        match kind {
+            AstOptionalKind::Break => todo!(),
+            AstOptionalKind::Continue => todo!(),
+            AstOptionalKind::Return => {
+                if let Some(expr) = expr {
+                    let size = expr
+                        .typ
+                        .expect(
+                            "[INTERNAL ERR] `sub_expression` of `Return` node doesn't have a type.",
+                        )
+                        .size();
+                    self.compile_node(expr)?;
+                    self.emit_return(size);
+                } else {
+                    self.emit_inst(Instruction::Ret_0);
+                }
+            }
+        }
 
         Ok(())
     }

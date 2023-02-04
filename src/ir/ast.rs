@@ -21,6 +21,7 @@ pub enum AstInfo {
     Literal,
     Unary(AstUnaryKind, Box<Ast>),
     Binary(AstBinaryKind, Box<Ast>, Box<Ast>),
+    Optional(AstOptionalKind, Option<Box<Ast>>),
     Block(AstBlockKind, Vec<Ast>),
     Fn(Box<AstInfoFn>),
     Var(Box<AstInfoVar>),
@@ -55,6 +56,13 @@ pub enum AstBinaryKind {
     ConstrainedVarDeclTarget,
     Field,
     MemberAccess,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AstOptionalKind {
+    Break,
+    Continue,
+    Return,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,6 +151,19 @@ impl Ast {
             scope: ScopeIndex(0),
             typ: None,
             info: AstInfo::Binary(kind, lhs, rhs),
+        }
+    }
+
+    pub fn new_optional(
+        kind: AstOptionalKind,
+        token: Token,
+        sub_expression: Option<Box<Ast>>,
+    ) -> Self {
+        Self {
+            token,
+            scope: ScopeIndex(0),
+            typ: None,
+            info: AstInfo::Optional(kind, sub_expression),
         }
     }
 

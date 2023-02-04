@@ -6,7 +6,7 @@ use crate::{
         annotations::{self, Annotations},
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoImport,
-            AstInfoStruct, AstInfoTypeSignature, AstInfoVar, AstUnaryKind, Queued,
+            AstInfoStruct, AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -458,6 +458,7 @@ impl<'file> Parser<'file> {
         let token = self.peek_token(0)?;
         let node = match token.info {
             TokenInfo::If => self.parse_if_statement()?,
+            TokenInfo::Return => self.parse_optional_statement(AstOptionalKind::Return)?,
             TokenInfo::XXXPrint => {
                 let token = self.next_token().expect("Already peeked");
                 self.parse_unary_with_precedence(
@@ -501,6 +502,20 @@ impl<'file> Parser<'file> {
                 else_block,
             })),
         ))
+    }
+
+    fn parse_optional_statement(&mut self, kind: AstOptionalKind) -> ParseResult {
+        let token = self
+            .next_token()
+            .expect("[INTERNAL ERR] Token failed to be extracted after peek.");
+
+        let sub_expression = if self.check_token(TokenInfoTag::Newline)? {
+            None
+        } else {
+            Some(Box::new(self.parse_expression()?))
+        };
+
+        Ok(Ast::new_optional(kind, token, sub_expression))
     }
 
     fn parse_expression(&mut self) -> ParseResult {

@@ -20,7 +20,7 @@ pub enum Instruction {
     // respectively.
     PushConst,     // (size:u16, idx:const<C>) [] -> [C]
     PushConst_Str, // (idx:const<S>) [] -> [S]
-    
+
     // Arithmetic
     Int_Add, // () [m, n] -> [m+n]
     Int_Sub, // () [m, n] -> [m-n]

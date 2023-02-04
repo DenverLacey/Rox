@@ -68,13 +68,10 @@ impl Stack {
     pub fn calloc(&self, size: Size) {
         let me = unsafe { &mut *self.inner.get() };
 
-        for byte in me
-            .buffer
+        me.buffer
             .get_mut(me.top..(me.top + size as usize))
             .expect("Stack overflow.")
-        {
-            *byte = 0;
-        }
+            .fill(0);
 
         me.top += size as usize;
     }
@@ -114,7 +111,10 @@ impl Stack {
         let me = unsafe { &mut *self.inner.get() };
         let addr = addr as usize;
 
-        let dst = me.buffer.get_mut(addr..addr + data.len()).expect("Stack overflow.");
+        let dst = me
+            .buffer
+            .get_mut(addr..addr + data.len())
+            .expect("Stack overflow.");
         dst.copy_from_slice(data);
     }
 
@@ -339,7 +339,8 @@ impl<'exe> VM<'exe> {
                     let dst: Pointer = self.stack.pop_value();
                     let src = self.stack.pop(size);
 
-                    let dst = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, size as usize) };
+                    let dst =
+                        unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, size as usize) };
                     dst.copy_from_slice(src);
                 }
                 MoveImm => {
@@ -477,7 +478,20 @@ impl<'exe> VM<'exe> {
                         .last_mut()
                         .expect("[INTERNAL ERR] No other frame to return to.");
                 }
-                Ret => todo!(),
+                Ret => {
+                    let size: Size = frame.reader.read();
+                    let reset_point = frame.stack_bottom;
+
+                    let return_value = self.stack.pop(size);
+                    self.stack.flush(reset_point);
+                    self.stack.push(return_value);
+
+                    self.frames.pop();
+                    frame = self
+                        .frames
+                        .last_mut()
+                        .expect("[INTERNAL ERR] No other frame to return to.");
+                }
             }
         }
 
