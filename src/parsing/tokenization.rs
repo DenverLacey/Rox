@@ -74,6 +74,10 @@ pub enum TokenInfo {
     Percent,
     Bang,
     Equal,
+    LeftAngle,
+    LeftAngleEqual,
+    RightAngle,
+    RightAngleEqual,
     Ampersand,
     Dot,
     DotDot,
@@ -86,6 +90,7 @@ pub enum TokenInfo {
     As,
     If,
     Else,
+    For,
     Struct,
     Return,
 
@@ -118,6 +123,10 @@ impl TokenInfo {
             TokenInfo::Percent => TokenPrecedence::Factor,
             TokenInfo::Bang => TokenPrecedence::Unary,
             TokenInfo::Equal => TokenPrecedence::None,
+            TokenInfo::LeftAngle => TokenPrecedence::Comparison,
+            TokenInfo::LeftAngleEqual => TokenPrecedence::Comparison,
+            TokenInfo::RightAngle => TokenPrecedence::Comparison,
+            TokenInfo::RightAngleEqual => TokenPrecedence::Comparison,
             TokenInfo::Ampersand => TokenPrecedence::BitAnd,
             TokenInfo::Dot => TokenPrecedence::Call,
             TokenInfo::DotDot => TokenPrecedence::Range,
@@ -128,6 +137,7 @@ impl TokenInfo {
             TokenInfo::As => TokenPrecedence::Cast,
             TokenInfo::If => TokenPrecedence::None,
             TokenInfo::Else => TokenPrecedence::None,
+            TokenInfo::For => TokenPrecedence::None,
             TokenInfo::Struct => TokenPrecedence::None,
             TokenInfo::Return => TokenPrecedence::None,
             TokenInfo::XXXPrint => TokenPrecedence::None,
@@ -161,6 +171,10 @@ impl Display for TokenInfo {
             TokenInfo::Percent => write!(f, "%"),
             TokenInfo::Bang => write!(f, "!"),
             TokenInfo::Equal => write!(f, "="),
+            TokenInfo::LeftAngle => write!(f, "<"),
+            TokenInfo::LeftAngleEqual => write!(f, "<="),
+            TokenInfo::RightAngle => write!(f, ">"),
+            TokenInfo::RightAngleEqual => write!(f, ">="),
             TokenInfo::Ampersand => write!(f, "&"),
             TokenInfo::Dot => write!(f, "."),
             TokenInfo::DotDot => write!(f, ".."),
@@ -171,6 +185,7 @@ impl Display for TokenInfo {
             TokenInfo::As => write!(f, "as"),
             TokenInfo::If => write!(f, "if"),
             TokenInfo::Else => write!(f, "else"),
+            TokenInfo::For => write!(f, "for"),
             TokenInfo::Struct => write!(f, "struct"),
             TokenInfo::Return => write!(f, "return"),
             TokenInfo::XXXPrint => write!(f, "XXXprint"),
@@ -499,6 +514,7 @@ impl<'file> Tokenizer<'file> {
             "as" => Token::new(tok_loc, TokenInfo::As),
             "if" => Token::new(tok_loc, TokenInfo::If),
             "else" => Token::new(tok_loc, TokenInfo::Else),
+            "for" => Token::new(tok_loc, TokenInfo::For),
             "struct" => Token::new(tok_loc, TokenInfo::Struct),
             "return" => Token::new(tok_loc, TokenInfo::Return),
             "XXXprint" => Token::new(tok_loc, TokenInfo::XXXPrint),
@@ -530,6 +546,20 @@ impl<'file> Tokenizer<'file> {
             '%' => TokenInfo::Percent,
             '!' => TokenInfo::Bang,
             '=' => TokenInfo::Equal,
+            '<' => {
+                if self.match_char('=') {
+                    TokenInfo::LeftAngleEqual
+                } else {
+                    TokenInfo::LeftAngle
+                }
+            }
+            '>' => {
+                if self.match_char('=') {
+                    TokenInfo::RightAngleEqual
+                } else {
+                    TokenInfo::RightAngle
+                }
+            }
             '&' => TokenInfo::Ampersand,
             '.' => {
                 if self.match_char('.') {

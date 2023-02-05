@@ -28,7 +28,7 @@ fn add(a: Int, b: Int): Int {
   return a + b
 }
 
-fn swap(a: &Int, b: &Int) {
+fn swap(a: &mut Int, b: &mut Int) {
   let t = *a
   *a = *b
   *b = t

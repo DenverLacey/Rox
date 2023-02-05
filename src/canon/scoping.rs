@@ -224,6 +224,15 @@ impl<'a> Scoper<'a> {
                     self.establish_scope_for_node(current_scope, else_block)?;
                 }
             }
+            AstInfo::For(info) => {
+                self.establish_scope_for_node(current_scope, &mut info.control)?;
+                self.establish_scope_for_node(current_scope, &mut info.body)?;
+            }
+            AstInfo::ForControl(info) => {
+                self.establish_scope_for_node(current_scope, &mut info.initializer)?;
+                self.establish_scope_for_node(current_scope, &mut info.condition)?;
+                self.establish_scope_for_node(current_scope, &mut info.step)?;
+            }
         }
 
         Ok(())

@@ -30,6 +30,8 @@ pub enum AstInfo {
     TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
     If(Box<AstInfoIf>),
+    For(Box<AstInfoFor>),
+    ForControl(Box<AstInfoForControl>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +51,10 @@ pub enum AstBinaryKind {
     Mul,
     Div,
     Mod,
+    Lt,
+    Le,
+    Gt,
+    Ge,
     Assign,
     Call,
     Subscript,
@@ -56,6 +62,7 @@ pub enum AstBinaryKind {
     ConstrainedVarDeclTarget,
     Field,
     MemberAccess,
+    In,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,6 +122,19 @@ pub struct AstInfoIf {
     pub condition: Ast,
     pub then_block: Ast,
     pub else_block: Option<Ast>,
+}
+
+#[derive(Debug)]
+pub struct AstInfoFor {
+    pub control: Ast,
+    pub body: Ast,
+}
+
+#[derive(Debug)]
+pub struct AstInfoForControl {
+    pub initializer: Ast,
+    pub condition: Ast,
+    pub step: Ast,
 }
 
 impl Ast {

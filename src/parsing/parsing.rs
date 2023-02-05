@@ -5,8 +5,9 @@ use crate::{
     ir::{
         annotations::{self, Annotations},
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoImport,
-            AstInfoStruct, AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoFor, AstInfoForControl,
+            AstInfoIf, AstInfoImport, AstInfoStruct, AstInfoTypeSignature, AstInfoVar,
+            AstOptionalKind, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -458,6 +459,7 @@ impl<'file> Parser<'file> {
         let token = self.peek_token(0)?;
         let node = match token.info {
             TokenInfo::If => self.parse_if_statement()?,
+            TokenInfo::For => self.parse_for_loop()?,
             TokenInfo::Return => self.parse_optional_statement(AstOptionalKind::Return)?,
             TokenInfo::XXXPrint => {
                 let token = self.next_token().expect("Already peeked");
@@ -501,6 +503,54 @@ impl<'file> Parser<'file> {
                 then_block,
                 else_block,
             })),
+        ))
+    }
+
+    fn parse_for_loop(&mut self) -> ParseResult {
+        let for_tok = self
+            .next_token()
+            .expect("[INTERNAL ERR] Expected the `for` token in a for loop.");
+
+        let mut control = self.parse_expression()?;
+
+        if self.match_token(TokenInfoTag::Equal)? {
+            let initializer = self.parse_expression()?;
+            let initializer = Ast::new(
+                control.token.clone(),
+                AstInfo::Var(Box::new(AstInfoVar {
+                    mutable: false,
+                    targets: vec![control],
+                    initializers: vec![initializer],
+                })),
+            );
+            self.expect_token(
+                TokenInfoTag::Comma,
+                "Expected `,` after initializer expression of `for` loop.",
+            )?;
+
+            let condition = self.parse_expression()?;
+            self.expect_token(
+                TokenInfoTag::Comma,
+                "Expected `,` after initializer expression of `for` loop.",
+            )?;
+
+            let step = self.parse_expression()?;
+
+            control = Ast::new(
+                initializer.token.clone(),
+                AstInfo::ForControl(Box::new(AstInfoForControl {
+                    initializer,
+                    condition,
+                    step,
+                })),
+            );
+        }
+
+        let body = self.parse_block(AstBlockKind::Block, TokenInfoTag::CurlyClose)?;
+
+        Ok(Ast::new(
+            for_tok,
+            AstInfo::For(Box::new(AstInfoFor { control, body })),
         ))
     }
 
@@ -619,6 +669,18 @@ impl<'file> Parser<'file> {
             }
             TokenInfo::Percent => {
                 self.parse_binary(AstBinaryKind::Mod, token, prec, Box::new(previous))
+            }
+            TokenInfo::LeftAngle => {
+                self.parse_binary(AstBinaryKind::Lt, token, prec, Box::new(previous))
+            }
+            TokenInfo::LeftAngleEqual => {
+                self.parse_binary(AstBinaryKind::Le, token, prec, Box::new(previous))
+            }
+            TokenInfo::RightAngle => {
+                self.parse_binary(AstBinaryKind::Gt, token, prec, Box::new(previous))
+            }
+            TokenInfo::RightAngleEqual => {
+                self.parse_binary(AstBinaryKind::Ge, token, prec, Box::new(previous))
             }
             TokenInfo::Dot => {
                 self.parse_binary(AstBinaryKind::MemberAccess, token, prec, Box::new(previous))

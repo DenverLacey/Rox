@@ -5,7 +5,7 @@ use crate::{
         annotations::Annotations,
         ast::{
             Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoVar,
-            AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
+            AstOptionalKind, AstUnaryKind, Queued, QueuedProgress, AstInfoFor,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -342,6 +342,12 @@ impl Compiler {
             .expect("[INTERNAL ERR] jump too big to fit in an `Addr`.");
     }
 
+    fn emit_jump_back(&mut self, loop_start: usize) {
+        self.emit_inst(Instruction::JumpBack);
+        let jump = self.current_function().code.len() - loop_start + std::mem::size_of::<Addr>();
+        self.emit_value(jump as Addr);
+    }
+
     fn emit_return(&mut self, size: Size) {
         if size == 0 {
             self.emit_inst(Instruction::Ret_0);
@@ -587,6 +593,8 @@ impl Compiler {
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
             AstInfo::TypeValue(typ) => todo!(),
             AstInfo::If(info) => self.compile_if_statement(info),
+            AstInfo::For(info) => self.compile_for_loop(info),
+            AstInfo::ForControl(_) => panic!("`ForControl` not being handled in `compile_for_loop`."),
 
             AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => unreachable!(),
         }
@@ -884,6 +892,42 @@ impl Compiler {
 
         Ok(())
     }
+    
+    fn compile_for_loop(&mut self, info: &AstInfoFor) -> Result<()> {
+        match &info.control.info {
+            AstInfo::ForControl(control_info) => todo!(),
+            AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
+            _ => self.compile_for_loop_condition(&info.control, &info.body),
+        }
+    }
+
+    fn compile_for_loop_condition(&mut self, cond: &Ast, body: &Ast) -> Result<()> {
+        let loop_start = self.current_function().code.len();
+        let stack_top = self.stack_top();
+
+    // auto label = this->label ? this->label->id : String{};
+    // c.begin_loop(label, location);
+        
+        self.compile_node(cond)?;
+        let exit_jump = self.emit_jump(Instruction::JumpFalse);
+
+        self.compile_node(body)?;
+
+    // auto loop = c.loops.back();
+
+    // c.patch_loop_controls(loop.continues);
+    // c.emit_loop(loop_start);
+
+        self.emit_jump_back(loop_start);
+
+        self.patch_jump(exit_jump);
+
+    // c.patch_loop_controls(loop.breaks);
+    // c.end_loop();
+
+        self.set_stack_top(stack_top);
+        Ok(())
+    }
 
     fn compile_unary(&mut self, kind: AstUnaryKind, typ: Option<Type>, expr: &Ast) -> Result<()> {
         match kind {
@@ -971,7 +1015,11 @@ impl Compiler {
             | AstBinaryKind::Sub
             | AstBinaryKind::Mul
             | AstBinaryKind::Div
-            | AstBinaryKind::Mod => self.compile_binary_typical(kind, node.typ, lhs, rhs),
+            | AstBinaryKind::Mod
+            | AstBinaryKind::Lt
+            | AstBinaryKind::Le
+            | AstBinaryKind::Gt
+            | AstBinaryKind::Ge => self.compile_binary_typical(kind, node.typ, lhs, rhs),
             AstBinaryKind::Assign => match self.find_static_address(lhs) {
                 Some(FindStaticAddressResult { addr, is_global }) => {
                     let size = lhs
@@ -1042,6 +1090,7 @@ impl Compiler {
             AstBinaryKind::Field => {
                 panic!("[INTERNAL ERR] `Field` node not being handled in `compile_struct_body()`.")
             }
+            AstBinaryKind::In => todo!(),
         }
     }
 
@@ -1066,10 +1115,20 @@ impl Compiler {
             (TypeKind::Int, TypeKind::Int, AstBinaryKind::Div) => self.emit_inst(Instruction::Int_Div),
             (TypeKind::Int, TypeKind::Int, AstBinaryKind::Mod) => self.emit_inst(Instruction::Int_Mod),
 
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Lt) => self.emit_inst(Instruction::Int_Lt),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Le) => self.emit_inst(Instruction::Int_Le),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Gt) => self.emit_inst(Instruction::Int_Gt),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Ge) => self.emit_inst(Instruction::Int_Ge),
+
             (TypeKind::Float, TypeKind::Float, AstBinaryKind::Add) => self.emit_inst(Instruction::Float_Add),
             (TypeKind::Float, TypeKind::Float, AstBinaryKind::Sub) => self.emit_inst(Instruction::Float_Sub),
             (TypeKind::Float, TypeKind::Float, AstBinaryKind::Mul) => self.emit_inst(Instruction::Float_Mul),
             (TypeKind::Float, TypeKind::Float, AstBinaryKind::Div) => self.emit_inst(Instruction::Float_Div),
+
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Lt) => self.emit_inst(Instruction::Float_Lt),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Le) => self.emit_inst(Instruction::Float_Le),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Gt) => self.emit_inst(Instruction::Float_Gt),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Ge) => self.emit_inst(Instruction::Float_Ge),
 
             _ => panic!("[INTERNAL ERR] Unhandled combination of type and binary kind (`{:?}`, `{:?}`, `{:?}`).", lhs_type, kind, rhs_type),
         }

@@ -539,6 +539,16 @@ impl Typechecker {
                     self.typecheck_node(interp, else_block)?;
                 }
             }
+            AstInfo::For(info) => {
+                match &info.control.info {
+                    AstInfo::ForControl(control_info) => todo!(),
+                    AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
+                    _ => {
+                        self.typecheck_for_loop_condition(&mut info.control, &mut info.body)?;
+                    }
+                }
+            }
+            AstInfo::ForControl(_) => panic!("[INTERNAL ERR] `ForControl` not being handled in `For` branch of `typecheck_node`."),
         }
 
         Ok(())
@@ -815,7 +825,7 @@ impl Typechecker {
                     .into());
                 }
 
-                if lhs_type != rhs_type {
+                if lhs_type.kind != rhs_type.kind {
                     return Err(SourceError2::new(
                         "Type Mistmatch.",
                         lhs.token.loc,
@@ -827,6 +837,62 @@ impl Typechecker {
                 }
 
                 Some(lhs_type)
+            }
+            AstBinaryKind::Lt
+            | AstBinaryKind::Le
+            | AstBinaryKind::Gt
+            | AstBinaryKind::Ge => {
+                    self.typecheck_node(interp, lhs)?;
+                    self.typecheck_node(interp, rhs)?;
+
+                let Some(lhs_type) = lhs.typ else {
+                        return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", TypeKind::Int, TypeKind::Float)).into());
+                    };
+
+                let Some(rhs_type) = rhs.typ else {
+                        return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", TypeKind::Int, TypeKind::Float)).into());
+                    };
+
+                if lhs_type.kind != TypeKind::Int && lhs_type.kind != TypeKind::Float {
+                    return Err(SourceError::new(
+                        "Type Mismatch.",
+                        lhs.token.loc,
+                        format!(
+                            "Type should be `{}` or `{}` but found `{}`.",
+                            TypeKind::Int,
+                            TypeKind::Float,
+                            lhs_type
+                        ),
+                    )
+                    .into());
+                }
+
+                if rhs_type.kind != TypeKind::Int && rhs_type.kind != TypeKind::Float {
+                    return Err(SourceError::new(
+                        "Type Mismatch.",
+                        rhs.token.loc,
+                        format!(
+                            "Type should be `{}` or `{}` but found `{}`.",
+                            TypeKind::Int,
+                            TypeKind::Float,
+                            rhs_type
+                        ),
+                    )
+                    .into());
+                }
+
+                if lhs_type.kind != rhs_type.kind {
+                    return Err(SourceError2::new(
+                        "Type Mistmatch.",
+                        lhs.token.loc,
+                        format!("`{}`.", lhs_type),
+                        rhs.token.loc,
+                        format!("`{}`", rhs_type),
+                    )
+                    .into());
+                }
+
+                Some(Type::of(TypeKind::Bool))
             }
             AstBinaryKind::Assign => {
                 self.typecheck_node(interp, lhs)?;
@@ -986,6 +1052,7 @@ impl Typechecker {
                     "`Field` nodes get special handling when typechecking struct declarations."
                 );
             }
+            AstBinaryKind::In => todo!(),
         };
 
         Ok(typ)
@@ -1160,5 +1227,21 @@ impl Typechecker {
         }
 
         Ok(())
+    }
+
+    fn typecheck_for_loop_condition(&mut self, cond: &mut Ast, body: &mut Ast) -> Result<()> {
+        let interp = Interpreter::get_mut();
+
+        self.typecheck_node(interp, cond)?;
+        
+        let Some(cond_type) = cond.typ else {
+            return Err(SourceError::new("Type mismatch", cond.token.loc, "Expected to be a type `Bool` but value has no value.").into());
+        };
+
+        if cond_type.kind != TypeKind::Bool {
+            return Err(SourceError::new("Type mismatch", cond.token.loc, format!("Expected to be type `Bool` but is actually type `{}`.", cond_type)).into());
+        }
+
+        self.typecheck_node(interp, body)
     }
 }
