@@ -3,7 +3,40 @@ use std::fmt::Display;
 use crate::{interp::Interpreter, runtime::vm::Size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Type {
+pub struct Type {
+    pub mutable: bool,
+    pub kind: TypeKind,
+}
+
+impl Type {
+    pub fn of(kind: TypeKind) -> Self {
+        Self {
+            mutable: false,
+            kind,
+        }
+    }
+
+    pub fn size(&self) -> Size {
+        self.kind.size()
+    }
+
+    pub fn is_pointer(&self) -> bool {
+        self.kind.is_pointer()
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.mutable {
+            write!(f, "mut ")?;
+        }
+
+        Display::fmt(&self.kind, f)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeKind {
     Bool,
     Char,
     Int,
@@ -13,7 +46,7 @@ pub enum Type {
     Composite(usize),
 }
 
-impl Type {
+impl TypeKind {
     pub fn size(&self) -> Size {
         let size: usize = match self {
             Self::Bool => std::mem::size_of::<runtime_type::Bool>(),
@@ -61,7 +94,7 @@ impl Type {
     }
 }
 
-impl Display for Type {
+impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             Self::Bool | Self::Char | Self::Int | Self::Float | Self::String | Self::Type => {
@@ -70,10 +103,10 @@ impl Display for Type {
             Self::Composite(idx) => {
                 let interp = Interpreter::get();
                 let typ = &interp.types[idx];
+
                 match typ {
                     TypeInfo::Pointer(info) => {
-                        let mut_str = if info.mutable_pointee { "mut " } else { "" };
-                        write!(f, "&{}{}", mut_str, info.pointee_type)
+                        write!(f, "&{}", info.pointee_type)
                     }
                     TypeInfo::Array(info) => {
                         write!(f, "[{}]{}", info.size, info.element_type)
@@ -113,7 +146,6 @@ pub enum TypeInfo {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TypeInfoPointer {
-    pub mutable_pointee: bool,
     pub pointee_type: Type,
 }
 

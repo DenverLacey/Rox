@@ -15,7 +15,7 @@ use crate::{
     },
     typing::value_type::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
-        Type, TypeInfo,
+        Type, TypeInfo, TypeKind,
     },
     util::errors::{Result, SourceError},
 };
@@ -327,7 +327,7 @@ impl Compiler {
 
         if jump_inst == Instruction::JumpTrue || jump_inst == Instruction::JumpFalse {
             let stack_top = self.stack_top();
-            self.set_stack_top(stack_top - Type::Bool.size());
+            self.set_stack_top(stack_top - TypeKind::Bool.size());
         }
 
         jump
@@ -411,7 +411,7 @@ impl Compiler {
                     return None;
                 }
 
-                let Type::Composite(lhs_type_idx) = lhs_type else {
+                let TypeKind::Composite(lhs_type_idx) = lhs_type.kind else {
                     panic!("[INTERNAL ERR] lhs's type of `MemberAccess` is not a composite type.");
                 };
                 let lhs_type = &interp.types[lhs_type_idx];
@@ -515,7 +515,7 @@ impl Compiler {
                     self.compile_addr_code(lhs)?;
                 }
 
-                let Type::Composite(lhs_type_idx) = lhs_type else {
+                let TypeKind::Composite(lhs_type_idx) = lhs_type.kind else {
                     panic!("[INTERNAL ERR] lhs's type of `MemberAccess` is not a composite type.");
                 };
                 let lhs_type = &interp.types[lhs_type_idx];
@@ -924,27 +924,27 @@ impl Compiler {
 
         self.compile_node(expr)?;
 
-        match (expr_type, kind) {
-            (Type::Int, AstUnaryKind::Neg) => self.emit_inst(Instruction::Int_Neg),
-            (Type::Float, AstUnaryKind::Neg) => self.emit_inst(Instruction::Float_Neg),
+        match (expr_type.kind, kind) {
+            (TypeKind::Int, AstUnaryKind::Neg) => self.emit_inst(Instruction::Int_Neg),
+            (TypeKind::Float, AstUnaryKind::Neg) => self.emit_inst(Instruction::Float_Neg),
 
-            (Type::Bool, AstUnaryKind::Not) => self.emit_inst(Instruction::Not),
-            (Type::Int, AstUnaryKind::Not) => self.emit_inst(Instruction::Bit_Not),
+            (TypeKind::Bool, AstUnaryKind::Not) => self.emit_inst(Instruction::Not),
+            (TypeKind::Int, AstUnaryKind::Not) => self.emit_inst(Instruction::Bit_Not),
 
-            (Type::Bool, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::Bool.size(), builtins::XXXprint_Bool)
+            (TypeKind::Bool, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(TypeKind::Bool.size(), builtins::XXXprint_Bool)
             }
-            (Type::Char, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::Char.size(), builtins::XXXprint_Char)
+            (TypeKind::Char, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(TypeKind::Char.size(), builtins::XXXprint_Char)
             }
-            (Type::Int, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::Int.size(), builtins::XXXprint_Int)
+            (TypeKind::Int, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(TypeKind::Int.size(), builtins::XXXprint_Int)
             }
-            (Type::Float, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::Float.size(), builtins::XXXprint_Float)
+            (TypeKind::Float, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(TypeKind::Float.size(), builtins::XXXprint_Float)
             }
-            (Type::String, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(Type::String.size(), builtins::XXXprint_String)
+            (TypeKind::String, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(TypeKind::String.size(), builtins::XXXprint_String)
             }
 
             _ => panic!(
@@ -1000,7 +1000,8 @@ impl Compiler {
                 if lhs
                     .typ
                     .expect("[INTERNAL ERR] lhs of `Call` node doesn't have a type.")
-                    == Type::Type
+                    .kind
+                    == TypeKind::Type
                 {
                     self.compile_node(rhs)
                 } else {
@@ -1058,17 +1059,17 @@ impl Compiler {
         self.compile_node(lhs)?;
         self.compile_node(rhs)?;
 
-        match (lhs_type, rhs_type, kind) {
-            (Type::Int, Type::Int, AstBinaryKind::Add) => self.emit_inst(Instruction::Int_Add),
-            (Type::Int, Type::Int, AstBinaryKind::Sub) => self.emit_inst(Instruction::Int_Sub),
-            (Type::Int, Type::Int, AstBinaryKind::Mul) => self.emit_inst(Instruction::Int_Mul),
-            (Type::Int, Type::Int, AstBinaryKind::Div) => self.emit_inst(Instruction::Int_Div),
-            (Type::Int, Type::Int, AstBinaryKind::Mod) => self.emit_inst(Instruction::Int_Mod),
+        match (lhs_type.kind, rhs_type.kind, kind) {
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Add) => self.emit_inst(Instruction::Int_Add),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Sub) => self.emit_inst(Instruction::Int_Sub),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Mul) => self.emit_inst(Instruction::Int_Mul),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Div) => self.emit_inst(Instruction::Int_Div),
+            (TypeKind::Int, TypeKind::Int, AstBinaryKind::Mod) => self.emit_inst(Instruction::Int_Mod),
 
-            (Type::Float, Type::Float, AstBinaryKind::Add) => self.emit_inst(Instruction::Float_Add),
-            (Type::Float, Type::Float, AstBinaryKind::Sub) => self.emit_inst(Instruction::Float_Sub),
-            (Type::Float, Type::Float, AstBinaryKind::Mul) => self.emit_inst(Instruction::Float_Mul),
-            (Type::Float, Type::Float, AstBinaryKind::Div) => self.emit_inst(Instruction::Float_Div),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Add) => self.emit_inst(Instruction::Float_Add),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Sub) => self.emit_inst(Instruction::Float_Sub),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Mul) => self.emit_inst(Instruction::Float_Mul),
+            (TypeKind::Float, TypeKind::Float, AstBinaryKind::Div) => self.emit_inst(Instruction::Float_Div),
 
             _ => panic!("[INTERNAL ERR] Unhandled combination of type and binary kind (`{:?}`, `{:?}`, `{:?}`).", lhs_type, kind, rhs_type),
         }

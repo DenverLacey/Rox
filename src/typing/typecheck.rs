@@ -6,6 +6,7 @@ use crate::{
         AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
     },
     parsing::tokenization::{CodeLocation, Token, TokenInfo},
+    typing::value_type::TypeKind,
     util::errors::{Result, SourceError, SourceError2},
 };
 
@@ -156,12 +157,13 @@ impl Typechecker {
             };
 
             self.typecheck_node(interp, type_constraint)?;
-            let AstInfo::TypeValue(type_constraint) = type_constraint.info else {
+            let  AstInfo::TypeValue(mut type_constraint) = type_constraint.info else {
                 return Err(SourceError::new("Type constraint expression is not a type.", type_constraint.token.loc, "This is not a type.").into());
             };
 
+            type_constraint.mutable = mutable;
+
             let binding = ScopeBinding::Var(VariableBinding {
-                is_mut: mutable,
                 typ: type_constraint,
                 is_global: scope.is_global(),
                 addr: 0,
@@ -182,7 +184,7 @@ impl Typechecker {
         scope: &mut Scope,
         mutable: bool,
         target: &mut Ast,
-        init_type: Type,
+        mut init_type: Type,
     ) -> Result<()> {
         match &mut target.info {
             AstInfo::Literal => {
@@ -190,8 +192,9 @@ impl Typechecker {
                     panic!("[INTERNAL ERR] target node is a `Literal` node but not an `Ident` node.");
                 };
 
+                init_type.mutable = mutable;
+
                 let binding = ScopeBinding::Var(VariableBinding {
-                    is_mut: mutable,
                     typ: init_type,
                     is_global: scope.is_global(),
                     addr: 0,
@@ -288,7 +291,7 @@ impl Typechecker {
             };
 
             self.typecheck_node(interp, typ)?;
-            if !matches!(typ.typ, Some(Type::Type)) {
+            if typ.typ != Some(Type::of(TypeKind::Type)) {
                 return Err(SourceError::new(
                     "Non-type expression in function parameter type annotation.",
                     typ.token.loc,
@@ -303,7 +306,6 @@ impl Typechecker {
 
             // @TODO: Mutable parameters?
             let param_binding = ScopeBinding::Var(VariableBinding {
-                is_mut: false,
                 typ: param_type,
                 is_global: false,
                 addr: 0,
@@ -326,7 +328,7 @@ impl Typechecker {
         if let Some(returns) = &mut info.returns {
             self.typecheck_node(interp, returns)?;
 
-            if !matches!(returns.typ, Some(Type::Type)) {
+            if returns.typ != Some(Type::of(TypeKind::Type)) {
                 return Err(SourceError::new(
                     "Expression expected to be a type for a function return type.",
                     returns.token.loc,
@@ -377,7 +379,7 @@ impl Typechecker {
             .id
             .expect("[INTERNAL ERR] funciton doesn't have an assigned FuncID.");
         let fn_info = &interp.funcs[id.0];
-        let Type::Composite(fn_type_idx) = fn_info.typ else {
+        let TypeKind::Composite(fn_type_idx) = fn_info.typ.kind else {
             panic!("[INTERNAL ERR] type of function {:?} is not a composite type.", id);
         };
         let fn_type = &interp.types[fn_type_idx];
@@ -454,7 +456,7 @@ impl Typechecker {
                 let scope = &mut interp.scopes[node.scope.0];
                 node.typ = self.typecheck_literal(scope, &node.token)?;
 
-                if matches!(node.typ, Some(Type::Type)) {
+                if node.typ == Some(Type::of(TypeKind::Type)) {
                     self.change_to_type_value_node(node);
                 }
             }
@@ -510,7 +512,7 @@ impl Typechecker {
                     };
 
                     let fn_type = interp.get_or_create_function_type(fn_type);
-                    node.typ = Some(Type::Type);
+                    node.typ = Some(Type::of(TypeKind::Type));
                     node.info = AstInfo::TypeValue(fn_type);
                 }
             },
@@ -520,7 +522,7 @@ impl Typechecker {
                 if info
                     .condition
                     .typ
-                    .filter(|t| matches!(*t, Type::Bool))
+                    .filter(|t| t.kind == TypeKind::Bool)
                     .is_none()
                 {
                     return Err(SourceError::new(
@@ -552,14 +554,14 @@ impl Typechecker {
                 match binding {
                     ScopeBinding::Var(var_binding) => var_binding.typ,
                     ScopeBinding::Fn(fn_binding) => fn_binding.typ,
-                    ScopeBinding::Type(_) => Type::Type,
+                    ScopeBinding::Type(_) => Type::of(TypeKind::Type),
                 }
             }
-            TokenInfo::Bool(_) => Type::Bool,
-            TokenInfo::Char(_) => Type::Char,
-            TokenInfo::Int(_) => Type::Int,
-            TokenInfo::Float(_) => Type::Float,
-            TokenInfo::String(_) => Type::String,
+            TokenInfo::Bool(_) => Type::of(TypeKind::Bool),
+            TokenInfo::Char(_) => Type::of(TypeKind::Char),
+            TokenInfo::Int(_) => Type::of(TypeKind::Int),
+            TokenInfo::Float(_) => Type::of(TypeKind::Float),
+            TokenInfo::String(_) => Type::of(TypeKind::String),
             _ => panic!(
                 "[INTERNAL ERR] `Literal` node has wrong info `{:?}`",
                 token.info
@@ -605,22 +607,22 @@ impl Typechecker {
                         expr.token.loc,
                         format!(
                             "Type should be `{}` or `{}` but found no type.",
-                            Type::Int,
-                            Type::Float
+                            TypeKind::Int,
+                            TypeKind::Float
                         ),
                     )
                     .into());
                 }
 
                 let expr_type = expr.typ.unwrap();
-                if expr_type != Type::Int && expr_type != Type::Float {
+                if expr_type.kind != TypeKind::Int && expr_type.kind != TypeKind::Float {
                     return Err(SourceError::new(
                         "Type Mismatch.",
                         expr.token.loc,
                         format!(
                             "Type should be `{}` or `{}` but found `{}`.",
-                            Type::Int,
-                            Type::Float,
+                            TypeKind::Int,
+                            TypeKind::Float,
                             expr_type
                         ),
                     )
@@ -636,17 +638,21 @@ impl Typechecker {
                     return Err(SourceError::new(
                         "Type Mismatch.",
                         expr.token.loc,
-                        format!("Type should be `{}` but found no type.", Type::Bool),
+                        format!("Type should be `{}` but found no type.", TypeKind::Bool),
                     )
                     .into());
                 }
 
                 let expr_type = expr.typ.unwrap();
-                if expr_type != Type::Bool {
+                if expr_type.kind != TypeKind::Bool {
                     return Err(SourceError::new(
                         "Type Mismatch.",
                         expr.token.loc,
-                        format!("Type should be `{}` but found `{}`.", Type::Bool, expr_type),
+                        format!(
+                            "Type should be `{}` but found `{}`.",
+                            TypeKind::Bool,
+                            expr_type
+                        ),
                     )
                     .into());
                 }
@@ -668,7 +674,7 @@ impl Typechecker {
 
                 let expr_type = expr.typ.unwrap();
                 let deref_type: Type;
-                if let Type::Composite(idx) = expr_type {
+                if let TypeKind::Composite(idx) = expr_type.kind {
                     let typ = &interp.types[idx];
                     if let TypeInfo::Pointer(type_info) = typ {
                         deref_type = type_info.pointee_type;
@@ -716,25 +722,37 @@ impl Typechecker {
             todo!("Handle void pointers.");
         }
 
-        let expr_type = expr.typ.unwrap();
-        let expr_type = if expr_type == Type::Type {
-            if let AstInfo::TypeValue(type_value) = expr.info {
+        let mut expr_type = expr.typ.unwrap();
+        let expr_type = if expr_type.kind == TypeKind::Type {
+            if let AstInfo::TypeValue(mut type_value) = expr.info {
+                type_value.mutable = mutable_pointee;
+
                 let ptr_type_value = interp.get_or_create_pointer_type(TypeInfoPointer {
-                    mutable_pointee,
                     pointee_type: type_value,
                 });
 
                 node.info = AstInfo::TypeValue(ptr_type_value);
-                Type::Type
+                Type::of(TypeKind::Type)
             } else {
                 interp.get_or_create_pointer_type(TypeInfoPointer {
-                    mutable_pointee,
-                    pointee_type: Type::Type,
+                    pointee_type: Type::of(TypeKind::Type),
                 })
             }
         } else {
+            if (!expr_type.mutable) && mutable_pointee {
+                return Err(SourceError::new(
+                    "Mutability mismatch.",
+                    expr.token.loc,
+                    format!(
+                        "Cannot take a mutable reference to a `{}` value.",
+                        expr_type
+                    ),
+                )
+                .into());
+            }
+
+            expr_type.mutable = mutable_pointee;
             interp.get_or_create_pointer_type(TypeInfoPointer {
-                mutable_pointee,
                 pointee_type: expr_type,
             })
         };
@@ -762,35 +780,35 @@ impl Typechecker {
                 self.typecheck_node(interp, rhs)?;
 
                 let Some(lhs_type) = lhs.typ else {
-                        return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
+                        return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", TypeKind::Int, TypeKind::Float)).into());
                     };
 
                 let Some(rhs_type) = rhs.typ else {
-                        return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", Type::Int, Type::Float)).into());
+                        return Err(SourceError::new("Type Mismatch.", rhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", TypeKind::Int, TypeKind::Float)).into());
                     };
 
-                if lhs_type != Type::Int && lhs_type != Type::Float {
+                if lhs_type.kind != TypeKind::Int && lhs_type.kind != TypeKind::Float {
                     return Err(SourceError::new(
                         "Type Mismatch.",
                         lhs.token.loc,
                         format!(
                             "Type should be `{}` or `{}` but found `{}`.",
-                            Type::Int,
-                            Type::Float,
+                            TypeKind::Int,
+                            TypeKind::Float,
                             lhs_type
                         ),
                     )
                     .into());
                 }
 
-                if rhs_type != Type::Int && rhs_type != Type::Float {
+                if rhs_type.kind != TypeKind::Int && rhs_type.kind != TypeKind::Float {
                     return Err(SourceError::new(
                         "Type Mismatch.",
                         rhs.token.loc,
                         format!(
                             "Type should be `{}` or `{}` but found `{}`.",
-                            Type::Int,
-                            Type::Float,
+                            TypeKind::Int,
+                            TypeKind::Float,
                             rhs_type
                         ),
                     )
@@ -822,10 +840,16 @@ impl Typechecker {
                     return Err(SourceError::new("Type Mistmatch.", rhs.token.loc, "This should have a type but it doesn't.").into());
                 };
 
-                // @TODO:
-                // Enforce immutability
-                //
-                if lhs_type != rhs_type {
+                if !lhs_type.mutable {
+                    return Err(SourceError::new(
+                        "Assignment to immutable variable.",
+                        lhs.token.loc,
+                        "Cannot assign to immutable variable.",
+                    )
+                    .into());
+                }
+
+                if lhs_type.kind != rhs_type.kind {
                     return Err(SourceError2::new(
                         "Type mismatch.",
                         lhs.token.loc,
@@ -849,7 +873,10 @@ impl Typechecker {
                 let return_type: Option<Type>;
 
                 match lhs.typ {
-                    Some(Type::Composite(lhs_type)) => {
+                    Some(Type {
+                        mutable: _,
+                        kind: TypeKind::Composite(lhs_type),
+                    }) => {
                         let type_info = &interp.types[lhs_type];
                         if let TypeInfo::Function(fn_info) = type_info {
                             self.typecheck_arguments(
@@ -860,15 +887,18 @@ impl Typechecker {
                             return_type = fn_info.returns;
                         } else {
                             return Err(SourceError::new(
-                                format!("Cannot call `{}`", Type::Composite(lhs_type)),
+                                format!("Cannot call `{}`", TypeKind::Composite(lhs_type)),
                                 lhs.token.loc,
                                 "This isn't a callable value.",
                             )
                             .into());
                         }
                     }
-                    Some(Type::Type) => {
-                        let AstInfo::TypeValue(Type::Composite(lhs_type)) = &lhs.info else {
+                    Some(Type {
+                        mutable: _,
+                        kind: TypeKind::Type,
+                    }) => {
+                        let AstInfo::TypeValue(Type { mutable: _, kind: TypeKind::Composite(lhs_type) }) = &lhs.info else {
                             panic!("[INTERNAL ERR] lhs of `Call` node is of type `Type` but is not a `TypeValue` node.");
                         };
 
@@ -879,10 +909,10 @@ impl Typechecker {
                                 struct_info.fields.iter().map(|f| f.typ),
                                 args,
                             )?;
-                            return_type = Some(Type::Composite(*lhs_type));
+                            return_type = Some(Type::of(TypeKind::Composite(*lhs_type)));
                         } else {
                             return Err(SourceError::new(
-                                format!("Cannot call `{}`", Type::Composite(*lhs_type)),
+                                format!("Cannot call `{}`", TypeKind::Composite(*lhs_type)),
                                 lhs.token.loc,
                                 "This isn't a callable value.",
                             )
@@ -919,9 +949,10 @@ impl Typechecker {
                 match lhs
                     .typ
                     .expect("[INTERNAL ERR] lhs of `MemberAccess` node does not have a type.")
+                    .kind
                 {
-                    Type::Type => todo!(),
-                    Type::Composite(idx) => {
+                    TypeKind::Type => todo!(),
+                    TypeKind::Composite(idx) => {
                         result_type = self.typecheck_member_access_composite(
                             interp,
                             idx,
@@ -1033,7 +1064,7 @@ impl Typechecker {
                             format!(
                                 "There is no field `{}` for type `{}`.",
                                 member_ident,
-                                Type::Composite(composite_idx)
+                                TypeKind::Composite(composite_idx)
                             ),
                         )
                     })?;
@@ -1046,7 +1077,7 @@ impl Typechecker {
                     object_location,
                     format!(
                         "This is of type `{}` which doesn't support member access.",
-                        Type::Composite(composite_idx),
+                        TypeKind::Composite(composite_idx),
                     ),
                 )
                 .into())

@@ -560,7 +560,13 @@ impl<'file> Parser<'file> {
             TokenInfo::Bang => self.parse_unary(AstUnaryKind::Not, token),
             TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token), // @TODO: Precompute negative numbers
             TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
-            TokenInfo::Ampersand => self.parse_unary(AstUnaryKind::Ref, token),
+            TokenInfo::Ampersand => {
+                if self.match_token(TokenInfoTag::Mut)? {
+                    self.parse_unary(AstUnaryKind::RefMut, token)
+                } else {
+                    self.parse_unary(AstUnaryKind::Ref, token)
+                }
+            }
             TokenInfo::Fn => self.parse_fn_type_signature(token),
             _ => Err(error!(
                 "Encountered a non-prefix token `{:?}` in prefix position.",

@@ -11,8 +11,8 @@ let x = 1
 fn main() {
   XXXprint 1.5
   let x = 1
-#  let y, z = 5
-#  mut u, v = 1, 4
+  let y, z = 5
+  mut u, v = 1, 4
   # foo()
   let sum = add(4, 9)
   XXXprint negative

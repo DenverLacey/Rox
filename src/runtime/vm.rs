@@ -6,7 +6,7 @@ use crate::{
     runtime::builtins::Builtin,
     typing::value_type::{
         runtime_type::{self, Bool, Char, Float, Int, Pointer},
-        Type, TypeInfo,
+        Type, TypeInfo, TypeKind,
     },
     util::{byte_reader::ByteReader, errors::Result},
 };
@@ -194,7 +194,11 @@ impl<'exe> VM<'exe> {
         self.run_global_scope()?;
         if cfg!(debug_assertions) {
             println!("Stack after global scope run:");
-            self.print_stack(&[Type::Int, Type::Int, Type::Int]);
+            self.print_stack(&[
+                Type::of(TypeKind::Int),
+                Type::of(TypeKind::Int),
+                Type::of(TypeKind::Int),
+            ]);
             println!();
         }
 
@@ -523,24 +527,24 @@ impl<'exe> VM<'exe> {
         for &typ in fmt {
             let value_idx = reader.offset();
 
-            match typ {
-                Type::Bool => {
+            match typ.kind {
+                TypeKind::Bool => {
                     let value: Bool = reader.read();
                     println!("{:04X}: {:?}", value_idx, value);
                 }
-                Type::Char => {
+                TypeKind::Char => {
                     let value: Char = reader.read();
                     println!("{:04X}: {:?}", value_idx, value);
                 }
-                Type::Int => {
+                TypeKind::Int => {
                     let value: Int = reader.read();
                     println!("{:04X}: {:?}", value_idx, value);
                 }
-                Type::Float => {
+                TypeKind::Float => {
                     let value: Float = reader.read();
                     println!("{:04X}: {:?}", value_idx, value);
                 }
-                Type::String => {
+                TypeKind::String => {
                     let value: runtime_type::String = reader.read();
                     let value =
                         unsafe { std::slice::from_raw_parts(value.chars, value.len as usize) };
@@ -548,8 +552,8 @@ impl<'exe> VM<'exe> {
                         .expect("[INTERNAL ERR] String value in stack not valid UTF-8.");
                     println!("{:04X}: {:?}", value_idx, value);
                 }
-                Type::Type => todo!(),
-                Type::Composite(idx) => {
+                TypeKind::Type => todo!(),
+                TypeKind::Composite(idx) => {
                     let interp = Interpreter::get();
                     let typ = &interp.types[idx];
                     match typ {

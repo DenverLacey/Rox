@@ -15,7 +15,6 @@ pub struct ScopeIndex(pub usize);
 #[derive(Debug, Default)]
 pub struct Scope {
     pub parent: Option<ScopeIndex>,
-    // pub children: Vec<ScopeIndex>,
     pub bindings: HashMap<String, ScopeBinding>,
 }
 
@@ -98,7 +97,6 @@ pub enum ScopeBinding {
 
 #[derive(Debug)]
 pub struct VariableBinding {
-    pub is_mut: bool,
     pub typ: Type,
     pub is_global: bool,
     pub addr: Addr,

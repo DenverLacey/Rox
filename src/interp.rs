@@ -18,6 +18,7 @@ use crate::{
         typecheck::typecheck_program,
         value_type::{
             Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct,
+            TypeKind,
         },
     },
     util::errors::{error, Result},
@@ -87,12 +88,12 @@ impl Interpreter {
     fn load_prelude(&mut self) {
         let mut prelude = Scope::new();
 
-        prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::Bool));
-        prelude.add_binding_unchecked("Char", ScopeBinding::Type(Type::Char));
-        prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::Int));
-        prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::Float));
-        prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::String));
-        prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::Type));
+        prelude.add_binding_unchecked("Bool", ScopeBinding::Type(Type::of(TypeKind::Bool)));
+        prelude.add_binding_unchecked("Char", ScopeBinding::Type(Type::of(TypeKind::Char)));
+        prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::of(TypeKind::Int)));
+        prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::of(TypeKind::Float)));
+        prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::of(TypeKind::String)));
+        prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::of(TypeKind::Type)));
 
         if self.scopes.is_empty() {
             self.scopes.push(prelude);
@@ -170,7 +171,7 @@ impl Interpreter {
         for (idx, typ) in self.types.iter().enumerate() {
             if let TypeInfo::Pointer(type_info) = typ {
                 if *type_info == info {
-                    return Type::Composite(idx);
+                    return Type::of(TypeKind::Composite(idx));
                 }
             }
         }
@@ -179,14 +180,14 @@ impl Interpreter {
         let new_type = TypeInfo::Pointer(info);
         self.types.push(new_type);
 
-        Type::Composite(idx)
+        Type::of(TypeKind::Composite(idx))
     }
 
     pub fn get_or_create_array_type(&mut self, info: TypeInfoArray) -> Type {
         for (idx, typ) in self.types.iter().enumerate() {
             if let TypeInfo::Array(type_info) = typ {
                 if *type_info == info {
-                    return Type::Composite(idx);
+                    return Type::of(TypeKind::Composite(idx));
                 }
             }
         }
@@ -195,7 +196,7 @@ impl Interpreter {
         let new_type = TypeInfo::Array(info);
         self.types.push(new_type);
 
-        Type::Composite(idx)
+        Type::of(TypeKind::Composite(idx))
     }
 
     pub fn create_struct_type(&mut self, info: TypeInfoStruct) -> Type {
@@ -203,7 +204,7 @@ impl Interpreter {
         let new_type = TypeInfo::Struct(info);
         self.types.push(new_type);
 
-        Type::Composite(idx)
+        Type::of(TypeKind::Composite(idx))
     }
 
     pub fn get_or_create_function_type(&mut self, info: TypeInfoFunction) -> Type {
@@ -212,7 +213,7 @@ impl Interpreter {
                 if info.returns == type_info.returns
                     && info.params.iter().eq(type_info.params.iter())
                 {
-                    return Type::Composite(idx);
+                    return Type::of(TypeKind::Composite(idx));
                 }
             }
         }
@@ -221,7 +222,7 @@ impl Interpreter {
         let new_type = TypeInfo::Function(info);
         self.types.push(new_type);
 
-        Type::Composite(idx)
+        Type::of(TypeKind::Composite(idx))
     }
 }
 
