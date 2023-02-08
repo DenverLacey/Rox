@@ -543,7 +543,8 @@ impl<'file> Parser<'file> {
                         .next_token()
                         .expect("[INTERNAL ERR] Already peeked this token.");
                     let prec = control_tok.info.precedence();
-                    step = self.parse_binary(AstBinaryKind::Assign, eq_tok, prec, Box::new(step))?;
+                    step =
+                        self.parse_binary(AstBinaryKind::Assign, eq_tok, prec, Box::new(step))?;
                 }
                 Some(step)
             } else {

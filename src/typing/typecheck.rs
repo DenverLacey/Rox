@@ -1256,6 +1256,18 @@ impl Typechecker {
 
         if let Some(cond) = &mut control.condition {
             self.typecheck_node(interp, cond)?;
+            let Some(cond_type) = cond.typ else {
+                return Err(SourceError::new("Type Mistmatch", cond.token.loc, "Expected type `Bool` but found no type.").into());
+            };
+
+            if cond_type.kind != TypeKind::Bool {
+                return Err(SourceError::new(
+                    "Type mismatch",
+                    cond.token.loc,
+                    format!("Expected type `Bool` but found type `{}`.", cond_type.kind),
+                )
+                .into());
+            }
         }
 
         if let Some(step) = &mut control.step {

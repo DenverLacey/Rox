@@ -4,8 +4,8 @@ use crate::{
     ir::{
         annotations::Annotations,
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoFor, AstInfoIf,
-            AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress, AstInfoForControl,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoFor, AstInfoForControl,
+            AstInfoIf, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -897,7 +897,9 @@ impl Compiler {
 
     fn compile_for_loop(&mut self, info: &AstInfoFor) -> Result<()> {
         match &info.control.info {
-            AstInfo::ForControl(control_info) => self.compile_c_like_for_loop(control_info, &info.body),
+            AstInfo::ForControl(control_info) => {
+                self.compile_c_like_for_loop(control_info, &info.body)
+            }
             AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
             _ => self.compile_for_loop_condition(&info.control, &info.body),
         }
