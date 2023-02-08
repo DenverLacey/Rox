@@ -29,4 +29,9 @@ fn loops() {
         i = i + 1
         XXXprint i
     }
+
+    # This infinite loops
+    # for {
+    #     XXXprint "AHHHHH!!!!"
+    # }
 }

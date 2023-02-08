@@ -540,12 +540,13 @@ impl Typechecker {
                 }
             }
             AstInfo::For(info) => {
-                match &mut info.control.info {
-                    AstInfo::ForControl(control_info) => self.typecheck_c_like_for_loop(interp, control_info, &mut info.body)?,
-                    AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
-                    _ => {
-                        self.typecheck_for_loop_condition(&mut info.control, &mut info.body)?;
+                match &mut info.control {
+                    Some(Ast { token: _, scope: _, typ: _, info: AstInfo::ForControl(control_info) }) => self.typecheck_c_like_for_loop(interp, control_info, &mut info.body)?,
+                    Some(Ast { token: _, scope: _, typ: _, info: AstInfo::Binary(AstBinaryKind::In, it, seq) }) => todo!(),
+                    Some(condition) => {
+                        self.typecheck_for_loop_condition(condition, &mut info.body)?;
                     }
+                    _ => self.typecheck_node(interp, &mut info.body)?,
                 }
             }
             AstInfo::ForControl(_) => panic!("[INTERNAL ERR] `ForControl` not being handled in `For` branch of `typecheck_node`."),

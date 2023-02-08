@@ -126,7 +126,7 @@ pub struct AstInfoIf {
 
 #[derive(Debug)]
 pub struct AstInfoFor {
-    pub control: Ast,
+    pub control: Option<Ast>,
     pub body: Ast,
 }
 

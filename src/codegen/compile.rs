@@ -896,12 +896,21 @@ impl Compiler {
     }
 
     fn compile_for_loop(&mut self, info: &AstInfoFor) -> Result<()> {
-        match &info.control.info {
-            AstInfo::ForControl(control_info) => {
-                self.compile_c_like_for_loop(control_info, &info.body)
-            }
-            AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
-            _ => self.compile_for_loop_condition(&info.control, &info.body),
+        match &info.control {
+            Some(Ast {
+                token: _,
+                scope: _,
+                typ: _,
+                info: AstInfo::ForControl(control_info),
+            }) => self.compile_c_like_for_loop(control_info, &info.body),
+            Some(Ast {
+                token: _,
+                scope: _,
+                typ: _,
+                info: AstInfo::Binary(AstBinaryKind::In, it, seq),
+            }) => todo!(),
+            Some(control) => self.compile_for_loop_condition(control, &info.body),
+            _ => self.compile_forever_loop(&info.body),
         }
     }
 
@@ -959,6 +968,17 @@ impl Compiler {
 
         // c.patch_loop_controls(loop.breaks);
         // c.end_loop();
+
+        self.set_stack_top(stack_top);
+        Ok(())
+    }
+
+    fn compile_forever_loop(&mut self, body: &Ast) -> Result<()> {
+        let loop_start = self.current_function().code.len();
+        let stack_top = self.stack_top();
+
+        self.compile_node(body)?;
+        self.emit_jump_back(loop_start);
 
         self.set_stack_top(stack_top);
         Ok(())

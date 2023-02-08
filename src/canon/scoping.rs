@@ -225,7 +225,9 @@ impl<'a> Scoper<'a> {
                 }
             }
             AstInfo::For(info) => {
-                self.establish_scope_for_node(current_scope, &mut info.control)?;
+                if let Some(control) = &mut info.control {
+                    self.establish_scope_for_node(current_scope, control)?;
+                }
                 self.establish_scope_for_node(current_scope, &mut info.body)?;
             }
             AstInfo::ForControl(info) => {

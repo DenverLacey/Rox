@@ -299,7 +299,9 @@ impl<'files> Resolver<'files> {
                 }
             }
             AstInfo::For(info) => {
-                Self::resolve_dependencies_for_node(current_scope, deps, &info.control);
+                if let Some(control) = &info.control {
+                    Self::resolve_dependencies_for_node(current_scope, deps, control);
+                }
                 Self::resolve_dependencies_for_node(current_scope, deps, &info.body);
             }
             AstInfo::ForControl(info) => {
