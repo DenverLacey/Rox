@@ -4,8 +4,8 @@ use crate::{
     ir::{
         annotations::Annotations,
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoIf, AstInfoVar,
-            AstOptionalKind, AstUnaryKind, Queued, QueuedProgress, AstInfoFor,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoFor, AstInfoIf,
+            AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress, AstInfoForControl,
         },
     },
     parsing::tokenization::{Token, TokenInfo},
@@ -594,7 +594,9 @@ impl Compiler {
             AstInfo::TypeValue(typ) => todo!(),
             AstInfo::If(info) => self.compile_if_statement(info),
             AstInfo::For(info) => self.compile_for_loop(info),
-            AstInfo::ForControl(_) => panic!("`ForControl` not being handled in `compile_for_loop`."),
+            AstInfo::ForControl(_) => {
+                panic!("`ForControl` not being handled in `compile_for_loop`.")
+            }
 
             AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => unreachable!(),
         }
@@ -892,38 +894,69 @@ impl Compiler {
 
         Ok(())
     }
-    
+
     fn compile_for_loop(&mut self, info: &AstInfoFor) -> Result<()> {
         match &info.control.info {
-            AstInfo::ForControl(control_info) => todo!(),
+            AstInfo::ForControl(control_info) => self.compile_c_like_for_loop(control_info, &info.body),
             AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
             _ => self.compile_for_loop_condition(&info.control, &info.body),
         }
+    }
+
+    fn compile_c_like_for_loop(&mut self, control: &AstInfoForControl, body: &Ast) -> Result<()> {
+        let stack_top = self.stack_top();
+
+        self.compile_node(&control.initializer)?;
+
+        let loop_start = self.current_function().code.len();
+
+        let exit_jump = if let Some(cond) = &control.condition {
+            self.compile_node(cond)?;
+            let exit_jump = self.emit_jump(Instruction::JumpFalse);
+            Some(exit_jump)
+        } else {
+            None
+        };
+
+        self.compile_node(body)?;
+
+        if let Some(step) = &control.step {
+            self.compile_node(step)?;
+        }
+
+        self.emit_jump_back(loop_start);
+
+        if let Some(exit_jump) = exit_jump {
+            self.patch_jump(exit_jump);
+        }
+
+        self.set_stack_top(stack_top);
+        Ok(())
     }
 
     fn compile_for_loop_condition(&mut self, cond: &Ast, body: &Ast) -> Result<()> {
         let loop_start = self.current_function().code.len();
         let stack_top = self.stack_top();
 
-    // auto label = this->label ? this->label->id : String{};
-    // c.begin_loop(label, location);
-        
+        // auto label = this->label ? this->label->id : String{};
+        // c.begin_loop(label, location);
+
         self.compile_node(cond)?;
         let exit_jump = self.emit_jump(Instruction::JumpFalse);
 
         self.compile_node(body)?;
 
-    // auto loop = c.loops.back();
+        // auto loop = c.loops.back();
 
-    // c.patch_loop_controls(loop.continues);
-    // c.emit_loop(loop_start);
+        // c.patch_loop_controls(loop.continues);
+        // c.emit_loop(loop_start);
 
         self.emit_jump_back(loop_start);
 
         self.patch_jump(exit_jump);
 
-    // c.patch_loop_controls(loop.breaks);
-    // c.end_loop();
+        // c.patch_loop_controls(loop.breaks);
+        // c.end_loop();
 
         self.set_stack_top(stack_top);
         Ok(())

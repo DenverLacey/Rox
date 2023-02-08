@@ -2,8 +2,8 @@ use crate::{
     canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoStruct, AstInfoTypeSignature,
-        AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoForControl, AstInfoStruct,
+        AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
     },
     parsing::tokenization::{CodeLocation, Token, TokenInfo},
     typing::value_type::TypeKind,
@@ -540,8 +540,8 @@ impl Typechecker {
                 }
             }
             AstInfo::For(info) => {
-                match &info.control.info {
-                    AstInfo::ForControl(control_info) => todo!(),
+                match &mut info.control.info {
+                    AstInfo::ForControl(control_info) => self.typecheck_c_like_for_loop(interp, control_info, &mut info.body)?,
                     AstInfo::Binary(AstBinaryKind::In, it, seq) => todo!(),
                     _ => {
                         self.typecheck_for_loop_condition(&mut info.control, &mut info.body)?;
@@ -838,12 +838,9 @@ impl Typechecker {
 
                 Some(lhs_type)
             }
-            AstBinaryKind::Lt
-            | AstBinaryKind::Le
-            | AstBinaryKind::Gt
-            | AstBinaryKind::Ge => {
-                    self.typecheck_node(interp, lhs)?;
-                    self.typecheck_node(interp, rhs)?;
+            AstBinaryKind::Lt | AstBinaryKind::Le | AstBinaryKind::Gt | AstBinaryKind::Ge => {
+                self.typecheck_node(interp, lhs)?;
+                self.typecheck_node(interp, rhs)?;
 
                 let Some(lhs_type) = lhs.typ else {
                         return Err(SourceError::new("Type Mismatch.", lhs.token.loc, format!("Type should be `{}` or `{}` but found no type.", TypeKind::Int, TypeKind::Float)).into());
@@ -1229,17 +1226,66 @@ impl Typechecker {
         Ok(())
     }
 
+    fn typecheck_c_like_for_loop(
+        &mut self,
+        interp: &mut Interpreter,
+        control: &mut AstInfoForControl,
+        body: &mut Ast,
+    ) -> Result<()> {
+        let AstInfo::Var(info) = &mut control.initializer.info else {
+            panic!("[INTERNAL ERR] `initializer` of `ForControl` node is not an `Assign` node.");
+        };
+
+        assert_eq!(info.targets.len(), 1);
+        assert_eq!(info.initializers.len(), 1);
+
+        let ident = &mut info.targets[0];
+        let init = &mut info.initializers[0];
+
+        self.typecheck_node(interp, init)?;
+        let init_type = init.typ.ok_or_else(|| {
+            SourceError::new(
+                "Initializer expression of for loop has no type.",
+                init.token.loc,
+                "This doesn't have a type.",
+            )
+        })?;
+
+        let scope = &mut interp.scopes[init.scope.0];
+        self.typecheck_variable_for_binding(scope, true, ident, init_type)?;
+
+        if let Some(cond) = &mut control.condition {
+            self.typecheck_node(interp, cond)?;
+        }
+
+        if let Some(step) = &mut control.step {
+            self.typecheck_node(interp, step)?;
+        }
+
+        self.typecheck_node(interp, body)?;
+
+        Ok(())
+    }
+
     fn typecheck_for_loop_condition(&mut self, cond: &mut Ast, body: &mut Ast) -> Result<()> {
         let interp = Interpreter::get_mut();
 
         self.typecheck_node(interp, cond)?;
-        
+
         let Some(cond_type) = cond.typ else {
             return Err(SourceError::new("Type mismatch", cond.token.loc, "Expected to be a type `Bool` but value has no value.").into());
         };
 
         if cond_type.kind != TypeKind::Bool {
-            return Err(SourceError::new("Type mismatch", cond.token.loc, format!("Expected to be type `Bool` but is actually type `{}`.", cond_type)).into());
+            return Err(SourceError::new(
+                "Type mismatch",
+                cond.token.loc,
+                format!(
+                    "Expected to be type `Bool` but is actually type `{}`.",
+                    cond_type
+                ),
+            )
+            .into());
         }
 
         self.typecheck_node(interp, body)

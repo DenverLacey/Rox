@@ -230,8 +230,12 @@ impl<'a> Scoper<'a> {
             }
             AstInfo::ForControl(info) => {
                 self.establish_scope_for_node(current_scope, &mut info.initializer)?;
-                self.establish_scope_for_node(current_scope, &mut info.condition)?;
-                self.establish_scope_for_node(current_scope, &mut info.step)?;
+                if let Some(cond) = &mut info.condition {
+                    self.establish_scope_for_node(current_scope, cond)?;
+                }
+                if let Some(step) = &mut info.step {
+                    self.establish_scope_for_node(current_scope, step)?;
+                }
             }
         }
 

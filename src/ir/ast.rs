@@ -133,8 +133,8 @@ pub struct AstInfoFor {
 #[derive(Debug)]
 pub struct AstInfoForControl {
     pub initializer: Ast,
-    pub condition: Ast,
-    pub step: Ast,
+    pub condition: Option<Ast>,
+    pub step: Option<Ast>,
 }
 
 impl Ast {

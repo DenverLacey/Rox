@@ -304,8 +304,12 @@ impl<'files> Resolver<'files> {
             }
             AstInfo::ForControl(info) => {
                 Self::resolve_dependencies_for_node(current_scope, deps, &info.initializer);
-                Self::resolve_dependencies_for_node(current_scope, deps, &info.condition);
-                Self::resolve_dependencies_for_node(current_scope, deps, &info.step);
+                if let Some(cond) = &info.condition {
+                    Self::resolve_dependencies_for_node(current_scope, deps, cond);
+                }
+                if let Some(step) = &info.step {
+                    Self::resolve_dependencies_for_node(current_scope, deps, step);
+                }
             }
         }
     }

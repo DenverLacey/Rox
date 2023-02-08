@@ -512,7 +512,6 @@ impl<'file> Parser<'file> {
             .expect("[INTERNAL ERR] Expected the `for` token in a for loop.");
 
         let mut control = self.parse_expression()?;
-
         if self.match_token(TokenInfoTag::Equal)? {
             let initializer = self.parse_expression()?;
             let initializer = Ast::new(
@@ -528,16 +527,31 @@ impl<'file> Parser<'file> {
                 "Expected `,` after initializer expression of `for` loop.",
             )?;
 
-            let condition = self.parse_expression()?;
-            self.expect_token(
-                TokenInfoTag::Comma,
-                "Expected `,` after initializer expression of `for` loop.",
-            )?;
+            let control_tok = initializer.token.clone();
 
-            let step = self.parse_expression()?;
+            let condition = if !self.match_token(TokenInfoTag::Comma)? {
+                let condition = self.parse_expression()?;
+                Some(condition)
+            } else {
+                None
+            };
+
+            let step = if self.match_token(TokenInfoTag::Comma)? {
+                let mut step = self.parse_expression()?;
+                if self.check_token(TokenInfoTag::Equal)? {
+                    let eq_tok = self
+                        .next_token()
+                        .expect("[INTERNAL ERR] Already peeked this token.");
+                    let prec = control_tok.info.precedence();
+                    step = self.parse_binary(AstBinaryKind::Assign, eq_tok, prec, Box::new(step))?;
+                }
+                Some(step)
+            } else {
+                None
+            };
 
             control = Ast::new(
-                initializer.token.clone(),
+                control_tok,
                 AstInfo::ForControl(Box::new(AstInfoForControl {
                     initializer,
                     condition,
