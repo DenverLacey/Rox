@@ -1031,19 +1031,22 @@ impl Compiler {
             (TypeKind::Int, AstUnaryKind::Not) => self.emit_inst(Instruction::Bit_Not),
 
             (TypeKind::Bool, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(TypeKind::Bool.size(), builtins::XXXprint_Bool)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Bool)
             }
             (TypeKind::Char, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(TypeKind::Char.size(), builtins::XXXprint_Char)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Char)
             }
             (TypeKind::Int, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(TypeKind::Int.size(), builtins::XXXprint_Int)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Int)
             }
             (TypeKind::Float, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(TypeKind::Float.size(), builtins::XXXprint_Float)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Float)
             }
             (TypeKind::String, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(TypeKind::String.size(), builtins::XXXprint_String)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_String)
+            }
+            (_, AstUnaryKind::XXXPrint) if expr_type.is_pointer() => {
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Pointer)
             }
 
             _ => panic!(

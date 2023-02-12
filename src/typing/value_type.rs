@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Deref};
 
 use crate::{interp::Interpreter, runtime::vm::Size};
 
@@ -16,12 +16,72 @@ impl Type {
         }
     }
 
-    pub fn size(&self) -> Size {
-        self.kind.size()
-    }
+    pub fn assignable_to(&self, target: Type) -> bool {
+        match self.kind {
+            TypeKind::Bool => target.kind == TypeKind::Bool,
+            TypeKind::Char => target.kind == TypeKind::Char,
+            TypeKind::Int => target.kind == TypeKind::Int,
+            TypeKind::Float => target.kind == TypeKind::Float,
+            TypeKind::String => target.kind == TypeKind::String,
+            TypeKind::Type => target.kind == TypeKind::Type,
+            TypeKind::Composite(self_idx) => {
+                let interp = Interpreter::get();
+                let TypeKind::Composite(target_idx) = target.kind else {
+                    return false;
+                };
 
-    pub fn is_pointer(&self) -> bool {
-        self.kind.is_pointer()
+                let self_type = &interp.types[self_idx];
+                let target_type = &interp.types[target_idx];
+
+                match self_type {
+                    TypeInfo::Pointer(self_info) => {
+                        let TypeInfo::Pointer(target_info) = target_type else {
+                            return false;
+                        };
+
+                        if target_info.pointee_type.mutable && !self_info.pointee_type.mutable {
+                            return false;
+                        }
+
+                        self_info
+                            .pointee_type
+                            .assignable_to(target_info.pointee_type)
+                    }
+                    TypeInfo::Array(self_info) => {
+                        // TODO: Handle array to slice conversion or something
+                        let TypeInfo::Array(target_info) = target_type else {
+                            return false;
+                        };
+
+                        if self_info.size != target_info.size {
+                            return false;
+                        }
+
+                        // NOTE: Since this is just handling array types, and that arrays are value
+                        // types means we don't need to check mutability compatibility
+                        self_info
+                            .element_type
+                            .assignable_to(target_info.element_type)
+                    }
+                    TypeInfo::Function(self_info) => {
+                        let TypeInfo::Function(target_info) = target_type else {
+                            return false;
+                        };
+
+                        todo!()
+                    }
+                    TypeInfo::Struct(_) => self_idx == target_idx,
+                }
+            }
+        }
+    }
+}
+
+impl Deref for Type {
+    type Target = TypeKind;
+
+    fn deref(&self) -> &Self::Target {
+        &self.kind
     }
 }
 

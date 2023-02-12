@@ -185,7 +185,10 @@ impl Typechecker {
         mutable: bool,
         target: &mut Ast,
         mut init_type: Type,
+        init_loc: CodeLocation,
     ) -> Result<()> {
+        let interp = Interpreter::get_mut();
+
         match &mut target.info {
             AstInfo::Literal => {
                 let Token { loc: target_loc, info: TokenInfo::Ident(ident) } = &target.token else {
@@ -193,7 +196,6 @@ impl Typechecker {
                 };
 
                 init_type.mutable = mutable;
-
                 let binding = ScopeBinding::Var(VariableBinding {
                     typ: init_type,
                     is_global: scope.is_global(),
@@ -207,7 +209,61 @@ impl Typechecker {
                 )?;
             }
             AstInfo::Binary(AstBinaryKind::ConstrainedVarDeclTarget, ident, type_constraint) => {
-                todo!()
+                let Token { loc: target_loc, info: TokenInfo::Ident(ident) } = &ident.token else {
+                    panic!("[INTERNAL ERR] `ident` node of `ConstrainedVarDeclTarget` node is not an `Ident` node.");
+                };
+
+                self.typecheck_node(interp, type_constraint)?;
+                let type_constraint_type = type_constraint.typ.ok_or_else(|| {
+                    SourceError::new(
+                        "Type mismatch",
+                        type_constraint.token.loc,
+                        "Expected a type but found something without a type.",
+                    )
+                })?;
+
+                if type_constraint_type.kind != TypeKind::Type {
+                    return Err(SourceError::new(
+                        "Type mismatch",
+                        type_constraint.token.loc,
+                        format!(
+                            "Expected a type but found something of type `{}`.",
+                            type_constraint_type
+                        ),
+                    )
+                    .into());
+                }
+
+                let AstInfo::TypeValue(mut specified_type) = type_constraint.info else {
+                    panic!("[INTERNAL ERR] `type_constraint` node of `ConstrainedVarDeclTarget` didn't typecheck to a `TypeValue` node.");
+                };
+
+                if !init_type.assignable_to(specified_type) {
+                    return Err(SourceError2::new(
+                        "Type mismatch",
+                        init_loc,
+                        format!(
+                            "This evaluates to a `{}` value which doesn't match the type constraint `{}`.",
+                            init_type,
+                            specified_type
+                        ),
+                        type_constraint.token.loc,
+                        "Here is the type constraint.",
+                    ).into());
+                }
+
+                specified_type.mutable = mutable;
+                let binding = ScopeBinding::Var(VariableBinding {
+                    typ: specified_type,
+                    is_global: scope.is_global(),
+                    addr: 0,
+                });
+                scope.add_binding(
+                    ident.clone(),
+                    binding,
+                    *target_loc,
+                    format!("Redeclaration of `{}`", ident), // @TODO: Improve error
+                )?;
             }
             _ => panic!(
                 "[INTERNAL ERR] target node is not an `Ident` or `ConstrainedVarDeclTarget` node."
@@ -231,7 +287,7 @@ impl Typechecker {
         };
 
         for target in targets {
-            self.typecheck_variable_for_binding(scope, mutable, target, init_type)?;
+            self.typecheck_variable_for_binding(scope, mutable, target, init_type, init.token.loc)?;
         }
 
         Ok(())
@@ -256,7 +312,7 @@ impl Typechecker {
                 return Err(SourceError::new("Variable initializer has no type.", init.token.loc, "Cannot initialize a variable with typeless expression.").into());
             };
 
-            self.typecheck_variable_for_binding(scope, mutable, target, init_type)?;
+            self.typecheck_variable_for_binding(scope, mutable, target, init_type, init.token.loc)?;
         }
 
         Ok(())
@@ -1253,7 +1309,7 @@ impl Typechecker {
         })?;
 
         let scope = &mut interp.scopes[init.scope.0];
-        self.typecheck_variable_for_binding(scope, true, ident, init_type)?;
+        self.typecheck_variable_for_binding(scope, true, ident, init_type, init.token.loc)?;
 
         if let Some(cond) = &mut control.condition {
             self.typecheck_node(interp, cond)?;

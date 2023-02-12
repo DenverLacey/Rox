@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::typing::value_type::runtime_type::{self, Bool, Char, Float, Int};
+use crate::typing::value_type::runtime_type::{self, Bool, Char, Float, Int, Pointer};
 
 use super::vm::{Size, Stack};
 
@@ -47,4 +47,12 @@ pub fn XXXprint_String(stack: &mut Stack, arg_size: Size) {
 
     let mut stdout = std::io::stdout();
     writeln!(stdout, "{}", value).expect("Failed to write to stdout.");
+}
+
+#[allow(non_snake_case)]
+pub fn XXXprint_Pointer(stack: &mut Stack, _: Size) {
+    let value: Pointer = stack.pop_value();
+
+    let mut stdout = std::io::stdout();
+    writeln!(stdout, "{:?}", value).expect("Failed to write to stdout.");
 }

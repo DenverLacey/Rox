@@ -12,6 +12,7 @@ fn main() {
     XXXprint b
 
     loops()
+    type_constraints()
 }
 
 fn mul(a: Int, b: Int): Int {
@@ -34,4 +35,12 @@ fn loops() {
     # for {
     #     XXXprint "AHHHHH!!!!"
     # }
+}
+
+fn type_constraints() {
+    let x: Int = 50
+    let p: &Int = &x
+
+    XXXprint x
+    XXXprint p
 }
