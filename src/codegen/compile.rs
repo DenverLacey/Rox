@@ -69,13 +69,7 @@ pub fn compile_executable(files: &mut [ParsedFile]) -> Result<Executable> {
 fn queued_ready_for_compile(queued: &Queued) -> bool {
     let interp = Interpreter::get();
 
-    let deps = if matches!(queued.node.info, AstInfo::Fn(_)) {
-        &queued.inner_deps
-    } else {
-        &queued.deps
-    };
-
-    for dep in deps {
+    for dep in &queued.deps {
         let dep = &interp.parsed_files[dep.parsed_file_idx].ast[dep.queued_idx];
 
         if !is_node_compilable(&dep.node) {

@@ -5,43 +5,42 @@
 
 let y = x + 1
 let x = 1
-# let p: &Int = &y
+let p: &Int = &y
 
 %[entry]
 fn main() {
-  XXXprint 1.5
-  let x = 1
-  let y, z = 5
-  mut u, v = 1, 4
-  # foo()
-  let sum = add(4, 9)
-  XXXprint negative
+    XXXprint 1.5
+    let x = 1
+    let y, z = 5
+    mut u, v = 1, 4
+    foo()
+    let sum = add(4, 9)
+    XXXprint negative
 }
 
-# FIXME: This causes an infinite loop in the compiler
-# fn foo() {
-#   XXXprint "This is a dependency"
-#   let func = main
-# } 
+fn foo() {
+    XXXprint "This is a dependency"
+    let func = main
+} 
 
 fn add(a: Int, b: Int): Int {
-  return a + b
+    return a + b
 }
 
 fn swap(a: &mut Int, b: &mut Int) {
-  let t = *a
-  *a = *b
-  *b = t
+    let t = *a
+    *a = *b
+    *b = t
 }
 
 fn map(n: Int, f: fn(Int): Int): Int {
-  return f(n)
+    return f(n)
 }
 
 let negative = map(1, negate)
 
 fn negate(n: Int): Int {
-  return -n
+    return -n
 }
 
 # These are examples of circular dependencies
@@ -52,8 +51,8 @@ fn negate(n: Int): Int {
 # let z = z + 1
 # let bar = calls_baz() - 1
 # fn calls_baz() {
-#   baz()
+#     baz()
 # } 
 # fn baz() {
-#   let barf = bar + 1
+#     let barf = bar + 1
 # } 
