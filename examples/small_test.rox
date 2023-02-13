@@ -1,46 +1,23 @@
+
 %[entry]
 fn main() {
-    let x = mul(3, 5)
-    XXXprint x
+    XXXprint add(1, 4)
+    XXXprint sub(1, 4)
 
-    mut a, b = 10, 20
-    XXXprint a
-    XXXprint b
+    mut f = add
 
-    swap(&mut a, &mut b)
-    XXXprint a
-    XXXprint b
+    let sum = f(1, 4)
+    XXXprint sum
 
-    loops()
-    type_constraints()
+    f = sub
+    let diff = f(1, 4)
+    XXXprint diff
 }
 
-fn mul(a: Int, b: Int): Int {
-    return a * b
+fn add(a: Int, b: Int): Int {
+    return a + b
 }
 
-fn swap(a: &mut Int, b: &mut Int) {
-    let t = *a
-    *a = *b
-    *b = t
-}
-
-fn loops() {
-    for i = 0, i < 5 {
-        i = i + 1
-        XXXprint i
-    }
-
-    # This infinite loops
-    # for {
-    #     XXXprint "AHHHHH!!!!"
-    # }
-}
-
-fn type_constraints() {
-    let x: Int = 50
-    let p: &Int = &x
-
-    XXXprint x
-    XXXprint p
+fn sub(a: Int, b: Int): Int {
+    return a - b
 }

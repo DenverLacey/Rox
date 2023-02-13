@@ -1079,8 +1079,12 @@ impl Compiler {
                         .expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.")
                         .size();
 
+                    let stack_top = self.stack_top();
+
                     self.compile_node(rhs)?;
                     self.emit_move_imm(is_global, size, addr);
+
+                    self.set_stack_top(stack_top);
                     Ok(())
                 }
                 _ => {
@@ -1089,10 +1093,13 @@ impl Compiler {
                         .expect("[INTERNAL ERR] `lhs` node of assignment doesn't have a type.")
                         .size();
 
+                    let stack_top = self.stack_top();
+
                     self.compile_node(rhs)?;
                     self.compile_dynamic_addr_code(lhs)?;
                     self.emit_move(size);
 
+                    self.set_stack_top(stack_top);
                     Ok(())
                 }
             },
