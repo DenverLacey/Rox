@@ -5,9 +5,9 @@ use crate::{
     ir::{
         annotations::{self, Annotations},
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoFor, AstInfoForControl,
-            AstInfoIf, AstInfoImport, AstInfoStruct, AstInfoTypeSignature, AstInfoVar,
-            AstOptionalKind, AstUnaryKind, Queued,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoEnum, AstInfoFn, AstInfoFor,
+            AstInfoForControl, AstInfoIf, AstInfoImport, AstInfoStruct, AstInfoTypeSignature,
+            AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -173,6 +173,7 @@ impl<'file> Parser<'file> {
                 self.parse_declaration()
             }
             TokenInfo::Struct => self.parse_struct_decl(),
+            TokenInfo::Enum => self.parse_enum_decl(),
             _ => self.parse_statement_or_assignment(),
         }
     }
@@ -436,6 +437,34 @@ impl<'file> Parser<'file> {
         }
 
         Ok(Ast::new_block(AstBlockKind::Fields, token, fields))
+    }
+
+    fn parse_enum_decl(&mut self) -> ParseResult {
+        // TODO:
+        // annotations
+
+        let enum_tok = self.expect_token(
+            TokenInfoTag::Enum,
+            "Expected `enum` keyword to begin enum declaration.",
+        )?;
+
+        let ident_tok = self.skip_expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
+        let ident = Ast::new_literal(ident_tok);
+
+        let body = self.parse_enum_body()?;
+
+        Ok(Ast::new(
+            enum_tok,
+            AstInfo::Enum(Box::new(AstInfoEnum {
+                annons: todo!(),
+                ident,
+                body,
+            })),
+        ))
+    }
+
+    fn parse_enum_body(&mut self) -> ParseResult {
+        todo!()
     }
 
     fn parse_statement_or_assignment(&mut self) -> ParseResult {

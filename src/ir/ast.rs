@@ -27,6 +27,7 @@ pub enum AstInfo {
     Var(Box<AstInfoVar>),
     Import(Box<AstInfoImport>),
     Struct(Box<AstInfoStruct>),
+    Enum(Box<AstInfoEnum>),
     TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
     If(Box<AstInfoIf>),
@@ -107,6 +108,13 @@ pub struct AstInfoImport {
 
 #[derive(Debug)]
 pub struct AstInfoStruct {
+    pub annons: Annotations,
+    pub ident: Ast,
+    pub body: Ast,
+}
+
+#[derive(Debug)]
+pub struct AstInfoEnum {
     pub annons: Annotations,
     pub ident: Ast,
     pub body: Ast,
