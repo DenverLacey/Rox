@@ -15,7 +15,7 @@ use crate::{
     },
     typing::value_type::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
-        Type, TypeInfo, TypeKind,
+        Type, TypeInfo, TypeInfoEnum, TypeKind,
     },
     util::errors::{Result, SourceError},
 };
@@ -225,7 +225,7 @@ impl Compiler {
         self.emit_value(value);
     }
 
-    fn emit_ptr(&mut self, value: Pointer) {
+    fn emit_ptr(&mut self, value: *const ()) {
         self.emit_inst(Instruction::Lit_Pointer);
         self.emit_value(value);
     }
@@ -1037,22 +1037,39 @@ impl Compiler {
             (TypeKind::Int, AstUnaryKind::Not) => self.emit_inst(Instruction::Bit_Not),
 
             (TypeKind::Bool, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Bool)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Bool);
             }
             (TypeKind::Char, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Char)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Char);
             }
             (TypeKind::Int, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Int)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Int);
             }
             (TypeKind::Float, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Float)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Float);
             }
             (TypeKind::String, AstUnaryKind::XXXPrint) => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_String)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_String);
             }
             (_, AstUnaryKind::XXXPrint) if expr_type.is_pointer() => {
-                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Pointer)
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Pointer);
+            }
+            (TypeKind::Composite(type_idx), AstUnaryKind::XXXPrint) => {
+                let interp = Interpreter::get();
+                let type_info = &interp.types[type_idx];
+                match type_info {
+                    TypeInfo::Pointer(_) => unreachable!(),
+                    TypeInfo::Array(info) => todo!(),
+                    TypeInfo::Struct(info) => todo!(),
+                    TypeInfo::Enum(info) => {
+                        self.emit_ptr(info as *const TypeInfoEnum as *const ());
+                        self.emit_call_builtin(
+                            expr_type.size() + TypeKind::Int.size(),
+                            builtins::XXXprint_enum,
+                        );
+                    }
+                    TypeInfo::Function(info) => todo!(),
+                }
             }
 
             _ => panic!(

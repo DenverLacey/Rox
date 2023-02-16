@@ -9,5 +9,5 @@ let direction = Dir.Down
 
 %[entry]
 fn main() {
-    XXXprint "This compiled!"
+    XXXprint direction
 }
