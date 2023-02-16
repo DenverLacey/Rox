@@ -17,8 +17,8 @@ use crate::{
     typing::{
         typecheck::typecheck_program,
         value_type::{
-            Type, TypeInfo, TypeInfoArray, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct,
-            TypeKind,
+            Type, TypeInfo, TypeInfoArray, TypeInfoEnum, TypeInfoFunction, TypeInfoPointer,
+            TypeInfoStruct, TypeKind,
         },
     },
     util::errors::{error, Result},
@@ -202,6 +202,14 @@ impl Interpreter {
     pub fn create_struct_type(&mut self, info: TypeInfoStruct) -> Type {
         let idx = self.types.len();
         let new_type = TypeInfo::Struct(info);
+        self.types.push(new_type);
+
+        Type::of(TypeKind::Composite(idx))
+    }
+
+    pub fn create_enum_type(&mut self, info: TypeInfoEnum) -> Type {
+        let idx = self.types.len();
+        let new_type = TypeInfo::Enum(info);
         self.types.push(new_type);
 
         Type::of(TypeKind::Composite(idx))

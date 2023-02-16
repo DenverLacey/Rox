@@ -2,16 +2,18 @@ use crate::{
     canon::scoping::{FunctionBinding, Scope, ScopeBinding, VariableBinding},
     interp::{Interpreter, ParsedFile},
     ir::ast::{
-        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoFn, AstInfoForControl, AstInfoStruct,
-        AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued, QueuedProgress,
+        Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoEnum, AstInfoFn, AstInfoForControl,
+        AstInfoStruct, AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
+        QueuedProgress,
     },
     parsing::tokenization::{CodeLocation, Token, TokenInfo},
-    typing::value_type::TypeKind,
+    typing::value_type::{runtime_type, TypeKind},
     util::errors::{Result, SourceError, SourceError2},
 };
 
 use super::value_type::{
-    StructField, Type, TypeInfo, TypeInfoFunction, TypeInfoPointer, TypeInfoStruct,
+    EnumVariant, StructField, Type, TypeInfo, TypeInfoEnum, TypeInfoFunction, TypeInfoPointer,
+    TypeInfoStruct,
 };
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
@@ -101,6 +103,11 @@ impl Typechecker {
             AstInfo::Struct(info) => {
                 let scope = &mut interp.scopes[queued.node.scope.0];
                 self.typecheck_struct_decl(scope, &queued.node.token, info)?;
+                queued.progress = QueuedProgress::Typechecked;
+            }
+            AstInfo::Enum(info) => {
+                let scope = &mut interp.scopes[queued.node.scope.0];
+                self.typecheck_enum_decl(scope, &queued.node.token, info)?;
                 queued.progress = QueuedProgress::Typechecked;
             }
             AstInfo::Import(info) => todo!(),
@@ -506,6 +513,65 @@ impl Typechecker {
         Ok(())
     }
 
+    fn typecheck_enum_decl(
+        &mut self,
+        scope: &mut Scope,
+        token: &Token,
+        info: &mut AstInfoEnum,
+    ) -> Result<()> {
+        let interp = Interpreter::get_mut();
+
+        let TokenInfo::Ident(ident) = &info.ident.token.info else {
+            panic!("[INTERNAL ERR] `ident` node of `Enum` node not an `Ident` node.");
+        };
+
+        let AstInfo::Block(AstBlockKind::Variants, variant_nodes) = &mut info.body.info else {
+            panic!("[INTERNAL ERR] `body` node of `Enum` node not a `Variants` node.");
+        };
+
+        let mut current_value: runtime_type::Int = 0;
+        let mut variants = vec![];
+        for variant_node in variant_nodes {
+            let AstInfo::EnumVariant(variant_info) = &variant_node.info else {
+                panic!("[INTERANL ERR] `variant` node in `Enum` node is not an `EnumVariant` node.");
+            };
+
+            let TokenInfo::Ident(ident) = &variant_info.ident.token.info else {
+                panic!("[INTERANL ERR] `ident` node of `EnumVariant` node is not an `Ident` node.");
+            };
+
+            let variant_value = if let Some(value_node) = &variant_info.value {
+                todo!()
+            } else {
+                current_value
+            };
+
+            let variant = EnumVariant {
+                name: ident.clone(),
+                value: variant_value,
+            };
+            variants.push(variant);
+
+            current_value = variant_value + 1;
+        }
+
+        let enum_info = TypeInfoEnum {
+            name: ident.clone(),
+            variants: variants.into_boxed_slice(),
+        };
+
+        let enum_type = interp.create_enum_type(enum_info);
+        let binding = ScopeBinding::Type(enum_type);
+        scope.add_binding(
+            ident.clone(),
+            binding,
+            token.loc,
+            format!("Redeclaration of `{}`.", ident),
+        )?;
+
+        Ok(())
+    }
+
     fn typecheck_node(&mut self, interp: &mut Interpreter, node: &mut Ast) -> Result<()> {
         match &mut node.info {
             AstInfo::Literal => {
@@ -517,9 +583,9 @@ impl Typechecker {
                 }
             }
             AstInfo::Unary(_, _) => node.typ = self.typecheck_unary(node)?,
-            AstInfo::Binary(kind, lhs, rhs) => {
+            AstInfo::Binary(_, _, _) => {
                 let scope = &mut interp.scopes[node.scope.0];
-                node.typ = self.typecheck_binary(scope, &node.token, *kind, lhs, rhs)?;
+                node.typ = self.typecheck_binary(scope, node)?;
             }
             AstInfo::Optional(kind, sub) => {
                 self.typecheck_optional(*kind, &node.token, sub.as_mut().map(|e| e.as_mut()))?
@@ -535,6 +601,9 @@ impl Typechecker {
             AstInfo::Fn(info) => todo!(),
             AstInfo::Import(info) => todo!(),
             AstInfo::Struct(info) => todo!(),
+            AstInfo::Enum(info) => todo!(),
+            AstInfo::EnumVariant(_) => panic!("[INTERANL ERR] `EnumVariant` not being handled in `typecheck_enum_decl`."),
+            AstInfo::EnumVariantLiteral(_) => unreachable!(),
             AstInfo::TypeValue(_) => {}
             AstInfo::TypeSignature(sig) => match sig.as_mut() {
                 AstInfoTypeSignature::Function(params, returns) => {
@@ -827,15 +896,12 @@ impl Typechecker {
         Ok(Some(expr_type))
     }
 
-    fn typecheck_binary(
-        &mut self,
-        scope: &mut Scope,
-        token: &Token,
-        kind: AstBinaryKind,
-        lhs: &mut Ast,
-        rhs: &mut Ast,
-    ) -> TypecheckResult {
+    fn typecheck_binary(&mut self, scope: &mut Scope, node: &mut Ast) -> TypecheckResult {
         let interp = Interpreter::get_mut();
+
+        let AstInfo::Binary(kind, lhs, rhs) = &mut node.info else {
+            panic!("[INTERNAL ERR] node passed to `typecheck_binary` was not a `Binary` node.");
+        };
 
         let typ = match kind {
             AstBinaryKind::Add
@@ -1071,7 +1137,50 @@ impl Typechecker {
                     .expect("[INTERNAL ERR] lhs of `MemberAccess` node does not have a type.")
                     .kind
                 {
-                    TypeKind::Type => todo!(),
+                    TypeKind::Type => {
+                        let AstInfo::TypeValue(typ) = lhs.info else {
+                            todo!("Decide what to do here.");
+                        };
+
+                        match typ.kind {
+                            TypeKind::Composite(idx) => {
+                                let type_info = &interp.types[idx];
+                                match type_info {
+                                    TypeInfo::Struct(info) => {
+                                        result_type =
+                                            self.typecheck_struct_type_member_access(info, rhs)?;
+                                    }
+                                    TypeInfo::Enum(info) => {
+                                        node.info =
+                                            self.typecheck_enum_type_member_access(info, rhs)?;
+                                        result_type = typ;
+                                    }
+                                    _ => {
+                                        return Err(SourceError::new(
+                                            "Cannot access member of this type.",
+                                            lhs.token.loc,
+                                            format!(
+                                            "This type `{}` does not support type member access. ",
+                                            typ.kind
+                                        ),
+                                        )
+                                        .into())
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(SourceError::new(
+                                    "Cannot access member of this type.",
+                                    lhs.token.loc,
+                                    format!(
+                                        "This type `{}` does not support type member access. ",
+                                        typ.kind
+                                    ),
+                                )
+                                .into())
+                            }
+                        }
+                    }
                     TypeKind::Composite(idx) => {
                         result_type = self.typecheck_member_access_composite(
                             interp,
@@ -1110,6 +1219,41 @@ impl Typechecker {
         };
 
         Ok(typ)
+    }
+
+    fn typecheck_struct_type_member_access(
+        &mut self,
+        info: &TypeInfoStruct,
+        member_node: &Ast,
+    ) -> Result<Type> {
+        todo!()
+    }
+
+    fn typecheck_enum_type_member_access(
+        &mut self,
+        info: &TypeInfoEnum,
+        member_node: &Ast,
+    ) -> Result<AstInfo> {
+        let TokenInfo::Ident(member_ident) = &member_node.token.info else {
+            panic!("[INTERNAL ERR] `rhs` of member access was not an `Ident` node.");
+        };
+
+        let variant = info
+            .variants
+            .iter()
+            .find(|var| var.name == *member_ident)
+            .ok_or_else(|| {
+                SourceError::new(
+                    "Unknown enum variant.",
+                    member_node.token.loc,
+                    format!(
+                        "Enum type `{}` does not have a `{}` variant.",
+                        info.name, member_ident
+                    ),
+                )
+            })?;
+
+        Ok(AstInfo::EnumVariantLiteral(variant.value))
     }
 
     fn typecheck_arguments(

@@ -194,11 +194,7 @@ impl<'exe> VM<'exe> {
         self.run_global_scope()?;
         if cfg!(debug_assertions) {
             println!("Stack after global scope run:");
-            self.print_stack(&[
-                Type::of(TypeKind::Int),
-                Type::of(TypeKind::Int),
-                Type::of(TypeKind::Int),
-            ]);
+            self.print_stack(&[Type::of(TypeKind::Int)]);
             println!();
         }
 
@@ -563,6 +559,11 @@ impl<'exe> VM<'exe> {
                         }
                         TypeInfo::Array(info) => todo!(),
                         TypeInfo::Struct(info) => todo!(),
+                        TypeInfo::Enum(info) => {
+                            let value: Int = reader.read();
+                            let variant = info.variants.iter().find(|var| var.value == value).expect(format!("[INTERNAL ERR] Integer value `{}` is not valid for enum type `{}`.", value, info.name).as_str());
+                            println!("{:04X}: {}.{}", value_idx, info.name, variant.name);
+                        }
                         TypeInfo::Function(info) => todo!(),
                     }
                 }

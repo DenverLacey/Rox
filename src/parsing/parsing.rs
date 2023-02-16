@@ -5,9 +5,9 @@ use crate::{
     ir::{
         annotations::{self, Annotations},
         ast::{
-            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoEnum, AstInfoFn, AstInfoFor,
-            AstInfoForControl, AstInfoIf, AstInfoImport, AstInfoStruct, AstInfoTypeSignature,
-            AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
+            Ast, AstBinaryKind, AstBlockKind, AstInfo, AstInfoEnum, AstInfoEnumVariant, AstInfoFn,
+            AstInfoFor, AstInfoForControl, AstInfoIf, AstInfoImport, AstInfoStruct,
+            AstInfoTypeSignature, AstInfoVar, AstOptionalKind, AstUnaryKind, Queued,
         },
     },
     parsing::tokenization::*,
@@ -440,8 +440,7 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_enum_decl(&mut self) -> ParseResult {
-        // TODO:
-        // annotations
+        let annons = self.clear_annontations_for_valid(annotations::ENUM_ANNOTATIONS)?;
 
         let enum_tok = self.expect_token(
             TokenInfoTag::Enum,
@@ -456,7 +455,7 @@ impl<'file> Parser<'file> {
         Ok(Ast::new(
             enum_tok,
             AstInfo::Enum(Box::new(AstInfoEnum {
-                annons: todo!(),
+                annons,
                 ident,
                 body,
             })),
@@ -464,7 +463,34 @@ impl<'file> Parser<'file> {
     }
 
     fn parse_enum_body(&mut self) -> ParseResult {
-        todo!()
+        let token = self.next_token()?;
+
+        let mut variants = vec![];
+
+        while !self.skip_match_token(TokenInfoTag::CurlyClose)?
+            && !self.check_token(TokenInfoTag::End)?
+        {
+            let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected variant name.")?;
+            let ident = Ast::new_literal(ident_tok);
+
+            let variant_value = if self.match_token(TokenInfoTag::Equal)? {
+                let variant_value = self.parse_expression()?;
+                Some(variant_value)
+            } else {
+                None
+            };
+
+            let variant = Ast::new(
+                ident.token.clone(),
+                AstInfo::EnumVariant(Box::new(AstInfoEnumVariant {
+                    ident,
+                    value: variant_value,
+                })),
+            );
+            variants.push(variant);
+        }
+
+        Ok(Ast::new_block(AstBlockKind::Variants, token, variants))
     }
 
     fn parse_statement_or_assignment(&mut self) -> ParseResult {

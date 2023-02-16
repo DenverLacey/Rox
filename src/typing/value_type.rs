@@ -71,6 +71,7 @@ impl Type {
                         todo!()
                     }
                     TypeInfo::Struct(_) => self_idx == target_idx,
+                    TypeInfo::Enum(_) => self_idx == target_idx,
                 }
             }
         }
@@ -131,6 +132,7 @@ impl TypeKind {
                         .iter()
                         .map(|field| field.typ.size() as usize)
                         .sum(),
+                    TypeInfo::Enum(_) => std::mem::size_of::<runtime_type::Int>(),
                     TypeInfo::Function(_) => std::mem::size_of::<*const ()>(),
                 }
             }
@@ -174,6 +176,9 @@ impl Display for TypeKind {
                     TypeInfo::Struct(info) => {
                         write!(f, "{}", info.name)
                     }
+                    TypeInfo::Enum(info) => {
+                        write!(f, "{}", info.name)
+                    }
                     TypeInfo::Function(info) => {
                         write!(f, "fn(")?;
 
@@ -201,6 +206,7 @@ pub enum TypeInfo {
     Pointer(TypeInfoPointer),
     Array(TypeInfoArray),
     Struct(TypeInfoStruct),
+    Enum(TypeInfoEnum),
     Function(TypeInfoFunction),
 }
 
@@ -234,6 +240,18 @@ impl TypeInfoStruct {
 pub struct StructField {
     pub name: String,
     pub typ: Type,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeInfoEnum {
+    pub name: String,
+    pub variants: Box<[EnumVariant]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    pub name: String,
+    pub value: runtime_type::Int,
 }
 
 #[derive(Clone, Debug)]

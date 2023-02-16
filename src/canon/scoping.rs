@@ -142,7 +142,7 @@ impl<'a> Scoper<'a> {
     fn establish_scope_for_nodes<'iter>(
         &mut self,
         current_scope: ScopeIndex,
-        nodes: impl Iterator<Item = &'iter mut Ast>,
+        nodes: impl IntoIterator<Item = &'iter mut Ast>,
     ) -> ScoperResult {
         for node in nodes {
             self.establish_scope_for_node(current_scope, node)?;
@@ -174,10 +174,10 @@ impl<'a> Scoper<'a> {
             }
             AstInfo::Block(AstBlockKind::Block, sub_nodes) => {
                 let new_scope = self.push_scope(current_scope);
-                self.establish_scope_for_nodes(new_scope, sub_nodes.iter_mut())?;
+                self.establish_scope_for_nodes(new_scope, sub_nodes)?;
             }
             AstInfo::Block(_, sub_nodes) => {
-                self.establish_scope_for_nodes(current_scope, sub_nodes.iter_mut())?
+                self.establish_scope_for_nodes(current_scope, sub_nodes)?
             }
             AstInfo::Fn(info) => {
                 let func_scope = self.push_scope(current_scope);
@@ -185,8 +185,8 @@ impl<'a> Scoper<'a> {
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }
             AstInfo::Var(info) => {
-                self.establish_scope_for_nodes(current_scope, info.targets.iter_mut())?;
-                self.establish_scope_for_nodes(current_scope, info.initializers.iter_mut())?;
+                self.establish_scope_for_nodes(current_scope, &mut info.targets)?;
+                self.establish_scope_for_nodes(current_scope, &mut info.initializers)?;
             }
             AstInfo::Import(info) => {
                 self.establish_scope_for_node(current_scope, &mut info.path)?;
@@ -203,13 +203,23 @@ impl<'a> Scoper<'a> {
                 let struct_scope = self.push_scope(current_scope);
                 self.establish_scope_for_node(struct_scope, &mut info.body)?;
             }
+            AstInfo::Enum(info) => {
+                let enum_scope = self.push_scope(current_scope);
+                self.establish_scope_for_node(enum_scope, &mut info.body)?;
+            }
+            AstInfo::EnumVariant(info) => {
+                if let Some(value) = &mut info.value {
+                    self.establish_scope_for_node(current_scope, value)?;
+                }
+            }
+            AstInfo::EnumVariantLiteral(_) => unreachable!(),
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(sig) => match sig.as_mut() {
                 AstInfoTypeSignature::Function(params, returns) => {
                     let AstInfo::Block(AstBlockKind::Params, params) = &mut params.info else {
                         panic!("[INTERNAL ERR] `params` node of type signature was not a `Params` node.");
                     };
-                    self.establish_scope_for_nodes(current_scope, params.iter_mut())?;
+                    self.establish_scope_for_nodes(current_scope, params)?;
 
                     if let Some(returns) = returns {
                         self.establish_scope_for_node(current_scope, returns)?;

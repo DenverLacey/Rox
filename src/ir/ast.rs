@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{
     canon::scoping::{FuncID, ScopeIndex},
     parsing::tokenization::Token,
-    typing::value_type::Type,
+    typing::value_type::{runtime_type, Type},
 };
 
 use super::annotations::Annotations;
@@ -28,6 +28,8 @@ pub enum AstInfo {
     Import(Box<AstInfoImport>),
     Struct(Box<AstInfoStruct>),
     Enum(Box<AstInfoEnum>),
+    EnumVariant(Box<AstInfoEnumVariant>),
+    EnumVariantLiteral(runtime_type::Int),
     TypeSignature(Box<AstInfoTypeSignature>),
     TypeValue(Type),
     If(Box<AstInfoIf>),
@@ -80,6 +82,7 @@ pub enum AstBlockKind {
     Params,
     Args,
     Fields,
+    Variants,
 }
 
 #[derive(Debug)]
@@ -118,6 +121,12 @@ pub struct AstInfoEnum {
     pub annons: Annotations,
     pub ident: Ast,
     pub body: Ast,
+}
+
+#[derive(Debug)]
+pub struct AstInfoEnumVariant {
+    pub ident: Ast,
+    pub value: Option<Ast>,
 }
 
 #[derive(Debug)]

@@ -18,16 +18,22 @@ pub static TABLE: phf::Map<&'static str, Annotations> = phf_map! {
 
 pub static FN_ANNOTATIONS: Annotations = fn_annotations();
 pub static STRUCT_ANNOTATIONS: Annotations = struct_annotations();
+pub static ENUM_ANNOTATIONS: Annotations = enum_annotations();
 
 const fn fn_annotations() -> Annotations {
     let entry: u32 = unsafe { std::mem::transmute(Annotations::FN_ENTRY) };
     let inline: u32 = unsafe { std::mem::transmute(Annotations::FN_INLINE) };
-    let annons = entry | inline;
+    let annons = 0x0 | entry | inline;
     unsafe { std::mem::transmute(annons) }
 }
 
 const fn struct_annotations() -> Annotations {
     let union: u32 = unsafe { std::mem::transmute(Annotations::STRUCT_UNION) };
-    let annons = union;
+    let annons = 0x0 | union;
+    unsafe { std::mem::transmute(annons) }
+}
+
+const fn enum_annotations() -> Annotations {
+    let annons = 0x0;
     unsafe { std::mem::transmute(annons) }
 }

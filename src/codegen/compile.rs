@@ -86,7 +86,11 @@ fn queued_ready_for_compile(queued: &Queued) -> bool {
 
 fn is_node_compilable(node: &Ast) -> bool {
     match node.info {
-        AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => false,
+        AstInfo::Import(_)
+        | AstInfo::TypeSignature(_)
+        | AstInfo::Struct(_)
+        | AstInfo::Enum(_)
+        | AstInfo::EnumVariant(_) => false,
         _ => true,
     }
 }
@@ -585,6 +589,10 @@ impl Compiler {
             AstInfo::Block(kind, nodes) => self.compile_block(*kind, nodes),
             AstInfo::Fn(info) => self.compile_fn_decl(&node.token, info),
             AstInfo::Var(info) => self.compile_var_decl(node.scope, &node.token, info),
+            AstInfo::EnumVariantLiteral(value) => {
+                self.emit_int(*value);
+                Ok(())
+            }
             AstInfo::TypeValue(typ) => todo!(),
             AstInfo::If(info) => self.compile_if_statement(info),
             AstInfo::For(info) => self.compile_for_loop(info),
@@ -592,7 +600,11 @@ impl Compiler {
                 panic!("`ForControl` not being handled in `compile_for_loop`.")
             }
 
-            AstInfo::Import(_) | AstInfo::TypeSignature(_) | AstInfo::Struct(_) => unreachable!(),
+            AstInfo::Import(_)
+            | AstInfo::TypeSignature(_)
+            | AstInfo::Struct(_)
+            | AstInfo::Enum(_)
+            | AstInfo::EnumVariant(_) => unreachable!(),
         }
     }
 

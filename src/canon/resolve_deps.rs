@@ -120,6 +120,16 @@ impl<'files> Resolver<'files> {
                             queued_idx: idx,
                         });
                     }
+                    AstInfo::Enum(info) => {
+                        let TokenInfo::Ident(ident) = &info.ident.token.info else {
+                            panic!("[INTERNAL ERR] `ident` node of `Enum` node not an `Ident` node.");
+                        };
+
+                        globals.push(Global {
+                            name: ident.clone(),
+                            queued_idx: idx,
+                        });
+                    }
 
                     AstInfo::Literal => {}
                     AstInfo::Unary(_, _) => {}
@@ -127,6 +137,8 @@ impl<'files> Resolver<'files> {
                     AstInfo::Optional(_, _) => {}
                     AstInfo::Block(_, _) => {}
                     AstInfo::Import(_) => {}
+                    AstInfo::EnumVariant(_) => {}
+                    AstInfo::EnumVariantLiteral(_) => unreachable!(),
                     AstInfo::TypeValue(_) => unreachable!(),
                     AstInfo::TypeSignature(_) => {}
                     AstInfo::If(_) => {}
@@ -198,18 +210,29 @@ impl<'files> Resolver<'files> {
                 };
                 Self::resolve_dependencies_for_nodes(current_scope, deps, fields);
             }
+            AstInfo::Enum(info) => {
+                let deps = &mut node.deps;
 
-            AstInfo::Literal => {}
-            AstInfo::Unary(_, _) => {}
-            AstInfo::Binary(_, _, _) => {}
-            AstInfo::Optional(_, _) => {}
-            AstInfo::Block(_, _) => {}
+                let AstInfo::Block(AstBlockKind::Variants, variants) = &info.body.info else {
+                    panic!("[INTERNAL ERR] `body` node in `Enum` node is not a `Variants` node.");
+                };
+
+                Self::resolve_dependencies_for_nodes(current_scope, deps, variants);
+            }
+
+            AstInfo::Literal => unreachable!(),
+            AstInfo::Unary(_, _) => unreachable!(),
+            AstInfo::Binary(_, _, _) => unreachable!(),
+            AstInfo::Optional(_, _) => unreachable!(),
+            AstInfo::Block(_, _) => unreachable!(),
             AstInfo::Import(_) => {}
+            AstInfo::EnumVariant(_) => unreachable!(),
+            AstInfo::EnumVariantLiteral(_) => unreachable!(),
             AstInfo::TypeValue(_) => unreachable!(),
-            AstInfo::TypeSignature(_) => {}
-            AstInfo::If(_) => {}
-            AstInfo::For(_) => {}
-            AstInfo::ForControl(_) => {}
+            AstInfo::TypeSignature(_) => unreachable!(),
+            AstInfo::If(_) => unreachable!(),
+            AstInfo::For(_) => unreachable!(),
+            AstInfo::ForControl(_) => unreachable!(),
         }
 
         node.progress = QueuedProgress::DependenciesFound;
@@ -276,6 +299,13 @@ impl<'files> Resolver<'files> {
                 Self::resolve_dependencies_for_nodes(current_scope, deps, &info.initializers);
             }
             AstInfo::Struct(info) => todo!(),
+            AstInfo::Enum(info) => todo!(),
+            AstInfo::EnumVariant(info) => {
+                if let Some(value) = &info.value {
+                    Self::resolve_dependencies_for_node(current_scope, deps, value);
+                }
+            }
+            AstInfo::EnumVariantLiteral(_) => unreachable!(),
             AstInfo::Import(info) => todo!(),
             AstInfo::TypeValue(_) => unreachable!(),
             AstInfo::TypeSignature(sig) => match sig.as_ref() {
