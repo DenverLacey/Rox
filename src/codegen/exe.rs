@@ -1,5 +1,6 @@
 use crate::{
     interp::Interpreter,
+    parsing::tokenization::CodeLocation,
     runtime::{
         builtins::Builtin,
         vm::{Addr, Size},
@@ -20,11 +21,16 @@ pub struct Executable {
     pub entry_point: usize,
 }
 
+#[derive(Clone, Copy)]
+pub struct EntryPoint {
+    pub index: usize,
+    pub loc: CodeLocation,
+}
+
 pub struct ExecutableBuilder {
     constants: Vec<u8>,
     str_constants: Vec<u8>,
-    // funcs: Vec<FunctionInfo>,
-    entry_point: Option<usize>,
+    entry_point: Option<EntryPoint>,
 }
 
 impl ExecutableBuilder {
@@ -102,12 +108,20 @@ impl ExecutableBuilder {
         idx
     }
 
-    pub fn set_entry_point(&mut self, entry_point: usize) -> bool {
+    pub fn entry_point(&self) -> Option<EntryPoint> {
+        self.entry_point
+    }
+
+    pub fn set_entry_point(&mut self, entry_point: usize, location: CodeLocation) -> bool {
         if self.entry_point.is_some() {
             return false;
         }
 
-        self.entry_point = Some(entry_point);
+        self.entry_point = Some(EntryPoint {
+            index: entry_point,
+            loc: location,
+        });
+
         true
     }
 
@@ -122,7 +136,8 @@ impl ExecutableBuilder {
             // funcs,
             entry_point: self
                 .entry_point
-                .ok_or_else(|| error!("No entry point function designated."))?,
+                .ok_or_else(|| error!("No entry point function designated."))?
+                .index,
         })
     }
 }

@@ -17,7 +17,7 @@ use crate::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
         Type, TypeInfo, TypeInfoEnum, TypeKind,
     },
-    util::errors::{Result, SourceError},
+    util::errors::{Result, SourceError, SourceError2},
 };
 
 use super::{
@@ -169,7 +169,8 @@ impl Compiler {
 
 impl Compiler {
     fn emit_byte(&mut self, byte: u8) {
-        self.current_function_mut().code.push(byte);
+        let func = self.current_function_mut();
+        func.code.push(byte);
     }
 
     fn emit_inst(&mut self, inst: Instruction) {
@@ -181,10 +182,7 @@ impl Compiler {
         self.emit_byte(byte);
     }
 
-    fn emit_value<T>(&mut self, value: T)
-    where
-        T: Copy + Sized,
-    {
+    fn emit_value<T: Copy>(&mut self, value: T) {
         let size = std::mem::size_of_val(&value);
 
         unsafe {
@@ -225,7 +223,7 @@ impl Compiler {
         self.emit_value(value);
     }
 
-    fn emit_ptr(&mut self, value: *const ()) {
+    fn emit_ptr(&mut self, value: Pointer) {
         self.emit_inst(Instruction::Lit_Pointer);
         self.emit_value(value);
     }
@@ -373,17 +371,10 @@ impl Compiler {
                         panic!("[INTERNAL ERR] Attempt to find static address of a `Literal` node that isn't an `Ident` node.");
                     };
 
-                    if var.is_global {
-                        Some(FindStaticAddressResult {
-                            addr: var.addr,
-                            is_global: true,
-                        })
-                    } else {
-                        Some(FindStaticAddressResult {
-                            addr: var.addr,
-                            is_global: false,
-                        })
-                    }
+                    Some(FindStaticAddressResult {
+                        addr: var.addr,
+                        is_global: var.is_global,
+                    })
                 }
                 _ => None,
             },
@@ -682,11 +673,14 @@ impl Compiler {
 
         let is_entry_point = info.annons.contains(Annotations::FN_ENTRY);
         if is_entry_point {
-            if !self.exe.set_entry_point(func.id.0) {
-                return Err(SourceError::new(
+            let ok = self.exe.set_entry_point(func.id.0, token.loc);
+            if !ok {
+                return Err(SourceError2::new(
                     "Multiple entry points declared.",
                     token.loc,
-                    "This was declared as the entry point when another function already has.",
+                    "This was declared as the entry point when another function already has been.",
+                    self.exe.entry_point().unwrap().loc,
+                    "This is the previously declared entry point.",
                 )
                 .into());
             }

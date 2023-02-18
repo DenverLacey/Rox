@@ -36,17 +36,47 @@ impl<'files> Resolver<'files> {
         }
 
         if cfg!(debug_assertions) {
-            dprintln!("\nFound dependencies before validation:");
-            for (fi, ni, deps) in self.files.iter().enumerate().flat_map(|(fi, f)| {
-                f.ast.iter().enumerate().map(move |(ni, n)| {
-                    (
+            dprintln!("\nDependencies found before validation:");
+            for (fi, file) in self.globals.iter().enumerate() {
+                for (ni, global) in file.iter().enumerate() {
+                    let name = global.name.as_str();
+                    let queued = &self.files[fi].ast[global.queued_idx];
+                    let deps = queued
+                        .deps
+                        .iter()
+                        .map(|dep| {
+                            (
+                                self.globals[dep.parsed_file_idx][dep.queued_idx]
+                                    .name
+                                    .as_str(),
+                                dep.parsed_file_idx,
+                                dep.queued_idx,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let inner_deps = queued
+                        .inner_deps
+                        .iter()
+                        .map(|dep| {
+                            (
+                                self.globals[dep.parsed_file_idx][dep.queued_idx]
+                                    .name
+                                    .as_str(),
+                                dep.parsed_file_idx,
+                                dep.queued_idx,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+
+                    dprintln!(
+                        "({}, {}, {}):\n\t{:?}\n\t{:?}",
+                        name,
                         fi,
                         ni,
-                        n.deps.iter().chain(n.inner_deps.iter()).collect::<Vec<_>>(),
-                    )
-                })
-            }) {
-                dprintln!("({},{}):\n\t{:?}", fi, ni, deps);
+                        deps,
+                        inner_deps
+                    );
+                }
             }
             dprintln!("");
         }
