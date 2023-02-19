@@ -541,7 +541,21 @@ impl Typechecker {
             };
 
             let variant_value = if let Some(value_node) = &variant_info.value {
-                todo!()
+                match &value_node.info {
+                    AstInfo::Literal => {
+                        if let TokenInfo::Int(value) = value_node.token.info {
+                            value
+                        } else {
+                            return Err(SourceError::new(
+                                "Enum variants assigned non-integer value.",
+                                value_node.token.loc,
+                                "Variant values must be integers.",
+                            )
+                            .into());
+                        }
+                    }
+                    _ => todo!(),
+                }
             } else {
                 current_value
             };

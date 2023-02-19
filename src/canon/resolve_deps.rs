@@ -69,7 +69,7 @@ impl<'files> Resolver<'files> {
                         .collect::<Vec<_>>();
 
                     dprintln!(
-                        "({}, {}, {}):\n\t{:?}\n\t{:?}",
+                        "({:?}, {}, {}):\n\t{:?}\n\t{:?}",
                         name,
                         fi,
                         ni,

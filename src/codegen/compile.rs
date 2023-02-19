@@ -15,7 +15,7 @@ use crate::{
     },
     typing::value_type::{
         runtime_type::{Bool, Char, Float, Int, Pointer},
-        Type, TypeInfo, TypeInfoEnum, TypeKind,
+        Type, TypeInfo, TypeInfoEnum, TypeInfoStruct, TypeKind,
     },
     util::errors::{Result, SourceError, SourceError2},
 };
@@ -1054,9 +1054,15 @@ impl Compiler {
                 match type_info {
                     TypeInfo::Pointer(_) => unreachable!(),
                     TypeInfo::Array(info) => todo!(),
-                    TypeInfo::Struct(info) => todo!(),
+                    TypeInfo::Struct(info) => {
+                        self.emit_ptr(info as *const TypeInfoStruct as Pointer);
+                        self.emit_call_builtin(
+                            expr_type.size() + TypeKind::Int.size(),
+                            builtins::XXXprint_struct,
+                        );
+                    }
                     TypeInfo::Enum(info) => {
-                        self.emit_ptr(info as *const TypeInfoEnum as *const ());
+                        self.emit_ptr(info as *const TypeInfoEnum as Pointer);
                         self.emit_call_builtin(
                             expr_type.size() + TypeKind::Int.size(),
                             builtins::XXXprint_enum,

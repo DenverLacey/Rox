@@ -1,13 +1,11 @@
-enum Dir {
-    Up
-    Down
-    Left
-    Right
-}
-
-let direction = Dir.Down
 
 %[entry]
 fn main() {
-    XXXprint direction
+    let foo = Foo(69, "four-twenty")
+    XXXprint foo
+}
+
+struct Foo {
+    i: Int
+    s: String
 }
