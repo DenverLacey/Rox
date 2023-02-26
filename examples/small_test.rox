@@ -3,9 +3,19 @@
 fn main() {
     let foo = Foo(69, "four-twenty")
     XXXprint foo
+
+    let bar = Bar(foo, 3.14)
+    XXXprint bar
+
+    XXXprint main
 }
 
 struct Foo {
     i: Int
     s: String
+}
+
+struct Bar {
+    foo: Foo
+    f: Float
 }
