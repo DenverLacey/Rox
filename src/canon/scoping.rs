@@ -182,6 +182,11 @@ impl<'a> Scoper<'a> {
             AstInfo::Fn(info) => {
                 let func_scope = self.push_scope(current_scope);
                 self.establish_scope_for_node(func_scope, &mut info.params)?;
+
+                if let Some(returns) = &mut info.returns {
+                    self.establish_scope_for_node(func_scope, returns)?;
+                }
+
                 self.establish_scope_for_node(func_scope, &mut info.body)?;
             }
             AstInfo::Var(info) => {

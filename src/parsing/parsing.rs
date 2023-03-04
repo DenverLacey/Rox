@@ -186,13 +186,23 @@ impl<'file> Parser<'file> {
             "Expected `fn` keyword to begin function declaration.",
         )?;
 
-        let ident_tok = self.expect_token(
-            TokenInfoTag::Ident,
-            "Expected an identifier after `fn` keyword.",
-        )?;
+        let receiver = if self.match_token(TokenInfoTag::ParenOpen)? {
+            let receiver = self.parse_parameter()?;
+            self.expect_token(
+                TokenInfoTag::ParenClose,
+                "Expected `)` to terminate receiver parameter list.",
+            )?;
+            Some(receiver)
+        } else {
+            None
+        };
+
+        let is_method = receiver.is_some();
+
+        let ident_tok = self.expect_token(TokenInfoTag::Ident, "Expected an identifier.")?;
         let ident = Ast::new_literal(ident_tok);
 
-        let params = self.parse_params()?;
+        let params = self.parse_params(receiver)?;
 
         let returns = if self.match_token(TokenInfoTag::Colon)? {
             Some(self.parse_expression()?)
@@ -206,6 +216,7 @@ impl<'file> Parser<'file> {
             fn_tok,
             AstInfo::Fn(Box::new(AstInfoFn {
                 annons: fn_annons,
+                is_method,
                 ident,
                 params,
                 returns,
@@ -215,35 +226,23 @@ impl<'file> Parser<'file> {
         ))
     }
 
-    fn parse_params(&mut self) -> ParseResult {
+    fn parse_params(&mut self, receiver: Option<Ast>) -> ParseResult {
         let tok = self.skip_expect_token(
             TokenInfoTag::ParenOpen,
             "Expected `(` to begin function parameter list.",
         )?;
+
         let mut params = vec![];
+        if let Some(receiver) = receiver {
+            params.push(receiver);
+        }
 
         loop {
             if self.skip_check_token(TokenInfoTag::ParenClose)? {
                 break;
             }
 
-            let param_ident_tok = self.skip_expect_token(
-                TokenInfoTag::Ident,
-                "Expected an identifier for function parameter.",
-            )?;
-            let param_ident = Ast::new_literal(param_ident_tok);
-            let colon_tok = self.skip_expect_token(
-                TokenInfoTag::Colon,
-                "Expected `:` after function paramter name.",
-            )?;
-            let param_typ = self.parse_expression()?;
-            let param = Ast::new_binary(
-                AstBinaryKind::Param,
-                colon_tok,
-                Box::new(param_ident),
-                Box::new(param_typ),
-            );
-
+            let param = self.parse_parameter()?;
             params.push(param);
 
             if !self.skip_match_token(TokenInfoTag::Comma)?
@@ -259,6 +258,27 @@ impl<'file> Parser<'file> {
         )?;
 
         Ok(Ast::new_block(AstBlockKind::Params, tok, params))
+    }
+
+    fn parse_parameter(&mut self) -> ParseResult {
+        let param_ident_tok = self.skip_expect_token(
+            TokenInfoTag::Ident,
+            "Expected an identifier for function parameter.",
+        )?;
+        let param_ident = Ast::new_literal(param_ident_tok);
+        let colon_tok = self.skip_expect_token(
+            TokenInfoTag::Colon,
+            "Expected `:` after function paramter name.",
+        )?;
+        let param_typ = self.parse_expression()?;
+        let param = Ast::new_binary(
+            AstBinaryKind::Param,
+            colon_tok,
+            Box::new(param_ident),
+            Box::new(param_typ),
+        );
+
+        Ok(param)
     }
 
     fn parse_var_decl(&mut self) -> ParseResult {

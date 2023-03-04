@@ -1,21 +1,18 @@
+struct Vector2 {
+    x: Float
+    y: Float
+}
+
+fn (self: Vector2) perp(): Vector2 {
+    return Vector2(self.y, -self.x)
+}
 
 %[entry]
 fn main() {
-    let foo = Foo(69, "four-twenty")
-    XXXprint foo
+    let v = Vector2(3.0, 7.0)
+    # let p = v.perp()
+    let p = perp(v)
 
-    let bar = Bar(foo, 3.14)
-    XXXprint bar
-
-    XXXprint main
-}
-
-struct Foo {
-    i: Int
-    s: String
-}
-
-struct Bar {
-    foo: Foo
-    f: Float
+    XXXprint v
+    XXXprint p
 }

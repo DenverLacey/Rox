@@ -121,11 +121,6 @@ impl Interpreter {
             for f in &self.parsed_files {
                 dprintln!("AST of {:?}:\n{:#?}\n", f.filepath, f.ast);
             }
-
-            for (i, s) in self.scopes.iter().enumerate() {
-                dprintln!("[{}]: {:?}", i, s);
-            }
-            dprintln!("");
         }
 
         self.resolve_dependencies()?;
@@ -135,6 +130,13 @@ impl Interpreter {
             "typechecked ast:\n{:?}\n",
             self.parsed_files.first().unwrap().ast
         );
+
+        if cfg!(debug_assertions) {
+            for (i, s) in self.scopes.iter().enumerate() {
+                dprintln!("[{}]: {:?}", i, s);
+            }
+            dprintln!("");
+        }
 
         let exe = compile_executable(&mut self.parsed_files)?;
 

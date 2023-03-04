@@ -88,6 +88,7 @@ pub enum AstBlockKind {
 #[derive(Debug)]
 pub struct AstInfoFn {
     pub annons: Annotations,
+    pub is_method: bool,
     pub ident: Ast,
     pub params: Ast,
     pub returns: Option<Ast>,
