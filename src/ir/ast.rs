@@ -84,6 +84,7 @@ pub enum AstBlockKind {
     Args,
     Fields,
     Variants,
+    ArrayLiteral,
 }
 
 #[derive(Debug)]

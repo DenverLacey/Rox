@@ -703,6 +703,18 @@ impl<'file> Parser<'file> {
                 )?;
                 Ok(node)
             }
+            TokenInfo::SqrBracketOpen => {
+                let node = self.parse_comma_separated_expressions(
+                    AstBlockKind::ArrayLiteral,
+                    TokenInfoTag::SqrBracketClose,
+                    None,
+                )?;
+                self.expect_token(
+                    TokenInfoTag::SqrBracketClose,
+                    "Expected `]` to terminate array literal.",
+                )?;
+                Ok(node)
+            }
             TokenInfo::Bang => self.parse_unary(AstUnaryKind::Not, token),
             TokenInfo::Dash => self.parse_unary(AstUnaryKind::Neg, token), // @TODO: Precompute negative numbers
             TokenInfo::Star => self.parse_unary(AstUnaryKind::Deref, token),
@@ -743,8 +755,12 @@ impl<'file> Parser<'file> {
                 ))
             }
             TokenInfo::SqrBracketOpen => {
-                let sub =
-                    self.parse_binary(AstBinaryKind::Subscript, token, prec, Box::new(previous))?;
+                let sub = self.parse_binary(
+                    AstBinaryKind::Subscript,
+                    token,
+                    TokenPrecedence::Assignment,
+                    Box::new(previous),
+                )?;
                 self.expect_token(
                     TokenInfoTag::SqrBracketClose,
                     "Expected `]` to terminate subscript operation.",

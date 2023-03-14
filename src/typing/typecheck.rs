@@ -12,8 +12,8 @@ use crate::{
 };
 
 use super::value_type::{
-    EnumVariant, StructField, Type, TypeInfo, TypeInfoEnum, TypeInfoFunction, TypeInfoPointer,
-    TypeInfoStruct,
+    EnumVariant, StructField, Type, TypeInfo, TypeInfoArray, TypeInfoEnum, TypeInfoFunction,
+    TypeInfoPointer, TypeInfoStruct,
 };
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
@@ -605,8 +605,15 @@ impl Typechecker {
                 self.typecheck_optional(*kind, &node.token, sub.as_mut().map(|e| e.as_mut()))?
             }
             AstInfo::Block(kind, nodes) => {
-                let scope = &mut interp.scopes[node.scope.0];
-                self.typecheck_block(scope, &node.token, *kind, nodes)?;
+                match kind {
+                    AstBlockKind::ArrayLiteral => {
+                        node.typ = Some(self.typecheck_array_literal(&node.token, nodes)?);
+                    }
+                    _ => {
+                        let scope = &mut interp.scopes[node.scope.0];
+                        self.typecheck_block(scope, &node.token, *kind, nodes)?;
+                    }
+                }
             }
             AstInfo::Var(info) => {
                 let scope = &mut interp.scopes[node.scope.0];
@@ -1456,6 +1463,50 @@ impl Typechecker {
         }
 
         Ok(())
+    }
+
+    fn typecheck_array_literal(&mut self, token: &Token, nodes: &mut [Ast]) -> Result<Type> {
+        let interp = Interpreter::get_mut();
+
+        if nodes.is_empty() {
+            todo!("infer element type from greater context.");
+        }
+
+        nodes
+            .iter_mut()
+            .try_for_each(|node| self.typecheck_node(interp, node))?;
+
+        let first_node = unsafe { nodes.first().unwrap_unchecked() };
+        let expected_type = first_node.typ.ok_or_else(|| {
+            SourceError::new(
+                "Type error.",
+                first_node.token.loc,
+                "Cannot have an array of typeless values.",
+            )
+        })?;
+
+        if let Some(node_with_different_type) =
+            nodes.iter().find(|node| node.typ != Some(expected_type))
+        {
+            return Err(SourceError::new(
+                "Type mismatch.",
+                node_with_different_type.token.loc,
+                format!(
+                    "Expected `{}` but found `{}`.",
+                    expected_type,
+                    node_with_different_type.typ.unwrap()
+                ),
+            )
+            .into());
+        }
+
+        let array_type_info = TypeInfoArray {
+            size: nodes.len(),
+            element_type: expected_type,
+        };
+
+        let array_type = interp.get_or_create_array_type(array_type_info);
+        Ok(array_type)
     }
 
     fn typecheck_block(
