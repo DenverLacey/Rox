@@ -66,6 +66,7 @@ pub enum AstBinaryKind {
     Field,
     MemberAccess,
     In,
+    Range,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

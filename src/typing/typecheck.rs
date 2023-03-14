@@ -1218,6 +1218,39 @@ impl Typechecker {
 
                 Some(result_type)
             }
+            AstBinaryKind::Range => {
+                self.typecheck_node(interp, lhs)?;
+                self.typecheck_node(interp, rhs)?;
+
+                let lhs_type = lhs.typ.expect("[INTERNAL ERR] `lhs` doesn't have a type.");
+                let rhs_type = rhs.typ.expect("[INTERNAL ERR] `rhs` doesn't have a type.");
+
+                if lhs_type.kind != TypeKind::Int {
+                    return Err(SourceError::new(
+                        "Type mismatch. (Only integer ranges implemented)",
+                        lhs.token.loc,
+                        format!(
+                            "Expected to be an `Int` value but found a `{}` value.",
+                            lhs_type.kind
+                        ),
+                    )
+                    .into());
+                }
+
+                if rhs_type.kind != TypeKind::Int {
+                    return Err(SourceError::new(
+                        "Type mismatch. (Only integer ranges implemented)",
+                        rhs.token.loc,
+                        format!(
+                            "Expected to be an `Int` value but found a `{}` value.",
+                            rhs_type.kind
+                        ),
+                    )
+                    .into());
+                }
+
+                Some(Type::of(TypeKind::Range))
+            }
             AstBinaryKind::Param => {
                 unreachable!("`Param` nodes get special handling when typechecking functions.");
             }

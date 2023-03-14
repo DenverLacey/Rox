@@ -23,6 +23,7 @@ impl Type {
             TypeKind::Int => target.kind == TypeKind::Int,
             TypeKind::Float => target.kind == TypeKind::Float,
             TypeKind::String => target.kind == TypeKind::String,
+            TypeKind::Range => target.kind == TypeKind::Range,
             TypeKind::Type => target.kind == TypeKind::Type,
             TypeKind::Composite(self_idx) => {
                 let interp = Interpreter::get();
@@ -103,6 +104,7 @@ pub enum TypeKind {
     Int,
     Float,
     String,
+    Range,
     Type,
     Composite(usize),
 }
@@ -115,6 +117,7 @@ impl TypeKind {
             Self::Int => std::mem::size_of::<runtime_type::Int>(),
             Self::Float => std::mem::size_of::<runtime_type::Float>(),
             Self::String => std::mem::size_of::<runtime_type::String>(),
+            Self::Range => std::mem::size_of::<runtime_type::Int>() * 2,
             Self::Type => std::mem::size_of::<*const ()>(), // @TEMP
             Self::Composite(idx) => {
                 let interp = Interpreter::get();
@@ -159,7 +162,13 @@ impl TypeKind {
 impl Display for TypeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Self::Bool | Self::Char | Self::Int | Self::Float | Self::String | Self::Type => {
+            Self::Bool
+            | Self::Char
+            | Self::Int
+            | Self::Float
+            | Self::String
+            | Self::Range
+            | Self::Type => {
                 write!(f, "{:?}", self)
             }
             Self::Composite(idx) => {
@@ -267,9 +276,17 @@ pub mod runtime_type {
     pub type Float = f64;
     pub type Pointer = *const ();
 
+    #[repr(C)]
     #[derive(Clone, Copy)]
     pub struct String {
         pub len: Int,
         pub chars: *const u8,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    pub struct Range {
+        pub start: Int,
+        pub end: Int,
     }
 }

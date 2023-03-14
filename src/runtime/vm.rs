@@ -548,6 +548,10 @@ impl<'exe> VM<'exe> {
                         .expect("[INTERNAL ERR] String value in stack not valid UTF-8.");
                     println!("{:04X}: {:?}", value_idx, value);
                 }
+                TypeKind::Range => {
+                    let value: runtime_type::Range = reader.read();
+                    println!("{:04X}: {}..{}", value_idx, value.start, value.end);
+                }
                 TypeKind::Type => todo!(),
                 TypeKind::Composite(idx) => {
                     let interp = Interpreter::get();

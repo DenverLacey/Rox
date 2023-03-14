@@ -1045,6 +1045,9 @@ impl Compiler {
             (TypeKind::String, AstUnaryKind::XXXPrint) => {
                 self.emit_call_builtin(expr_type.size(), builtins::XXXprint_String);
             }
+            (TypeKind::Range, AstUnaryKind::XXXPrint) => {
+                self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Range);
+            }
             (_, AstUnaryKind::XXXPrint) if expr_type.is_pointer() => {
                 self.emit_call_builtin(expr_type.size(), builtins::XXXprint_Pointer);
             }
@@ -1173,6 +1176,11 @@ impl Compiler {
                     }
                 }
 
+                Ok(())
+            }
+            AstBinaryKind::Range => {
+                self.compile_node(lhs)?;
+                self.compile_node(rhs)?;
                 Ok(())
             }
             AstBinaryKind::Param => {

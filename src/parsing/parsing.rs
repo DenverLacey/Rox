@@ -782,7 +782,7 @@ impl<'file> Parser<'file> {
                 self.parse_binary(AstBinaryKind::MemberAccess, token, prec, Box::new(previous))
             }
             TokenInfo::DotDot => {
-                todo!()
+                self.parse_binary(AstBinaryKind::Range, token, prec, Box::new(previous))
             }
             _ => Err(error!(
                 "Encountered a non-infix token `{:?}` in infix position.",

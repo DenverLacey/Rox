@@ -51,6 +51,13 @@ pub fn XXXprint_String(stack: &mut Stack, arg_size: Size) {
     writeln!(stdout).expect("Failed to write to stdout.");
 }
 
+pub fn XXXprint_Range(stack: &mut Stack, _: Size) {
+    let value: runtime_type::Range = stack.pop_value();
+    let mut stdout = std::io::stdout();
+    print_range(&mut stdout, value);
+    writeln!(stdout).expect("Failed to write to stdout.");
+}
+
 pub fn XXXprint_Pointer(stack: &mut Stack, _: Size) {
     let value: Pointer = stack.pop_value();
     let mut stdout = std::io::stdout();
@@ -105,6 +112,10 @@ fn print_value(stdout: &mut Stdout, ptr: *const (), typ: Type) {
             let value = unsafe { *(ptr as *const runtime_type::String) };
             print_string(stdout, value);
         }
+        TypeKind::Range => {
+            let value = unsafe { *(ptr as *const runtime_type::Range) };
+            print_range(stdout, value);
+        }
         TypeKind::Type => todo!(),
         TypeKind::Composite(idx) => {
             let interp = Interpreter::get();
@@ -151,6 +162,10 @@ fn print_string(stdout: &mut Stdout, value: runtime_type::String) {
     let value = unsafe { std::slice::from_raw_parts(value.chars, value.len as usize) };
     let value = unsafe { std::str::from_utf8_unchecked(value) };
     write!(stdout, "{}", value).expect("Failed to write to stdout.");
+}
+
+fn print_range(stdout: &mut Stdout, value: runtime_type::Range) {
+    write!(stdout, "{}..{}", value.start, value.end).expect("Failed to write to stdout.");
 }
 
 fn print_pointer(stdout: &mut Stdout, value: Pointer) {

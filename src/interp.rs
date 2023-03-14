@@ -93,6 +93,7 @@ impl Interpreter {
         prelude.add_binding_unchecked("Int", ScopeBinding::Type(Type::of(TypeKind::Int)));
         prelude.add_binding_unchecked("Float", ScopeBinding::Type(Type::of(TypeKind::Float)));
         prelude.add_binding_unchecked("String", ScopeBinding::Type(Type::of(TypeKind::String)));
+        prelude.add_binding_unchecked("Range", ScopeBinding::Type(Type::of(TypeKind::Range)));
         prelude.add_binding_unchecked("Type", ScopeBinding::Type(Type::of(TypeKind::Type)));
 
         if self.scopes.is_empty() {
