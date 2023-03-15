@@ -228,6 +228,23 @@ impl Compiler {
         self.emit_value(value);
     }
 
+    fn emit_push_const(&mut self, idx: usize, size: Size) {
+        self.emit_inst(Instruction::PushConst);
+        self.emit_value(size);
+        self.emit_value(idx);
+    }
+
+    fn emit_push_const_value<T: Copy>(&mut self, value: T) {
+        let size = std::mem::size_of::<T>();
+        let bytes = unsafe { std::slice::from_raw_parts(&value as *const T as *const u8, size) };
+        let idx = self.exe.add_constant(bytes);
+        self.emit_push_const(
+            idx,
+            size.try_into()
+                .expect("[INTERNAL ERR] size doesn't fit in a `Size`."),
+        );
+    }
+
     fn emit_push_const_str(&mut self, idx: usize) {
         self.emit_inst(Instruction::PushConst_Str);
         self.emit_value(idx);
@@ -1056,7 +1073,18 @@ impl Compiler {
                 let type_info = &interp.types[type_idx];
                 match type_info {
                     TypeInfo::Pointer(_) => unreachable!(),
-                    TypeInfo::Array(info) => todo!(),
+                    TypeInfo::Array(info) => {
+                        self.emit_int(info.size as Int);
+                        self.emit_push_const_value(info.element_type);
+
+                        let arg_size = std::mem::size_of_val(&info.size)
+                            + std::mem::size_of_val(&info.element_type)
+                            + info.element_type.size() as usize * info.size;
+                        let arg_size: Size = arg_size
+                            .try_into()
+                            .expect("[INTERNAL ERR] `arg_size` doesn't fit into a `Size`.");
+                        self.emit_call_builtin(arg_size, builtins::XXXprint_Array);
+                    }
                     TypeInfo::Struct(info) => {
                         self.emit_ptr(info as *const TypeInfoStruct as Pointer);
                         self.emit_call_builtin(

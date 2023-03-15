@@ -220,8 +220,9 @@ fn print_instructions(constants: &[u8], str_constants: &[u8], instructions: &[u8
                 let size: Size = reader.read();
                 let idx: usize = reader.read();
                 let constant = constants
-                    .get(idx..(idx + size as usize * 8))
+                    .get(idx..(idx + size as usize))
                     .expect("[INTERNAL ERR] Bad constant!!!");
+
                 println!(
                     "{:04X}: PushConst [{}] {}b {:?}",
                     inst_idx,

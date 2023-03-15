@@ -65,6 +65,21 @@ pub fn XXXprint_Pointer(stack: &mut Stack, _: Size) {
     writeln!(stdout).expect("Failed to write to stdout.");
 }
 
+pub fn XXXprint_Array(stack: &mut Stack, arg_size: Size) {
+    let element_type: Type = stack.pop_value();
+    let array_size: usize = stack.pop_value();
+
+    let array_size: Size = array_size
+        .try_into()
+        .expect("[INTERNAL ERR] Array size doesn't fit into a `Size`.");
+
+    let array_data = stack.pop(element_type.size() * array_size);
+
+    let mut stdout = std::io::stdout();
+    print_array(&mut stdout, array_data, element_type);
+    writeln!(stdout).expect("Failed to write to stdout.");
+}
+
 pub fn XXXprint_enum(stack: &mut Stack, _: Size) {
     let type_info: &TypeInfoEnum = stack.pop_value();
     let value: Int = stack.pop_value();
@@ -170,6 +185,22 @@ fn print_range(stdout: &mut Stdout, value: runtime_type::Range) {
 
 fn print_pointer(stdout: &mut Stdout, value: Pointer) {
     write!(stdout, "{:?}", value).expect("Failed to write to stdout.");
+}
+
+fn print_array(stdout: &mut Stdout, mut data: &[u8], element_type: Type) {
+    write!(stdout, "[").expect("Failed to write to stdout.");
+
+    while !data.is_empty() {
+        let element_ptr = &data[0] as *const u8 as Pointer;
+        print_value(stdout, element_ptr, element_type);
+        data = &data[element_type.size() as usize..];
+
+        if !data.is_empty() {
+            write!(stdout, ", ").expect("Failed to write to stdout.");
+        }
+    }
+
+    write!(stdout, "]").expect("Failed to write to stdout.");
 }
 
 fn print_struct(stdout: &mut Stdout, mut data: *const (), type_info: &TypeInfoStruct) {
