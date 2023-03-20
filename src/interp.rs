@@ -18,7 +18,7 @@ use crate::{
         typecheck::typecheck_program,
         value_type::{
             Type, TypeInfo, TypeInfoArray, TypeInfoEnum, TypeInfoFunction, TypeInfoPointer,
-            TypeInfoStruct, TypeKind,
+            TypeInfoSlice, TypeInfoStruct, TypeKind,
         },
     },
     util::errors::{error, Result},
@@ -197,6 +197,22 @@ impl Interpreter {
 
         let idx = self.types.len();
         let new_type = TypeInfo::Array(info);
+        self.types.push(new_type);
+
+        Type::of(TypeKind::Composite(idx))
+    }
+
+    pub fn get_or_create_slice_type(&mut self, info: TypeInfoSlice) -> Type {
+        for (idx, typ) in self.types.iter().enumerate() {
+            if let TypeInfo::Slice(type_info) = typ {
+                if *type_info == info {
+                    return Type::of(TypeKind::Composite(idx));
+                }
+            }
+        }
+
+        let idx = self.types.len();
+        let new_type = TypeInfo::Slice(info);
         self.types.push(new_type);
 
         Type::of(TypeKind::Composite(idx))

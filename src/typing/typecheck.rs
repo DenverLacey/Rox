@@ -13,7 +13,7 @@ use crate::{
 
 use super::value_type::{
     EnumVariant, StructField, Type, TypeInfo, TypeInfoArray, TypeInfoEnum, TypeInfoFunction,
-    TypeInfoPointer, TypeInfoStruct,
+    TypeInfoPointer, TypeInfoSlice, TypeInfoStruct,
 };
 
 pub fn typecheck_program(files: &mut [ParsedFile]) -> Result<()> {
@@ -1161,7 +1161,43 @@ impl Typechecker {
                     .into());
                 }
 
-                todo!()
+                self.typecheck_node(interp, rhs)?;
+                let Some(rhs_type) = rhs.typ else {
+                    return Err(SourceError::new("Type Mismatch", rhs.token.loc, "This expression doesn't have a type.").into());
+                };
+
+                if rhs_type.kind != TypeKind::Int || rhs_type.kind != TypeKind::Range {
+                    return Err(SourceError::new(
+                        "Type mismatch",
+                        rhs.token.loc,
+                        format!(
+                            "Expected either an `Int` value or a `Range` but found `{}`.",
+                            rhs_type.kind
+                        ),
+                    )
+                    .into());
+                }
+
+                let TypeKind::Composite(lhs_type_index) = lhs_type.kind else {
+                    panic!("[INTERNAL ERR] `lhs` should have already been guaranteed to be an array type.");
+                };
+
+                let lhs_type_info = &interp.types[lhs_type_index];
+                let element_type = match lhs_type_info {
+                    TypeInfo::Array(info) => info.element_type,
+                    TypeInfo::Slice(info) => info.element_type,
+                    _ => {
+                        panic!("[INTERNAL ERR] `lhs_type_info` was not an `Array` or `Slice` info.")
+                    }
+                };
+
+                if rhs_type.kind == TypeKind::Int {
+                    Some(element_type)
+                } else {
+                    let slice_type =
+                        interp.get_or_create_slice_type(TypeInfoSlice { element_type });
+                    Some(slice_type)
+                }
             }
             AstBinaryKind::MemberAccess => {
                 self.typecheck_node(interp, lhs)?;
