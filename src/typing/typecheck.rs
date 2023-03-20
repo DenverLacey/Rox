@@ -1166,7 +1166,7 @@ impl Typechecker {
                     return Err(SourceError::new("Type Mismatch", rhs.token.loc, "This expression doesn't have a type.").into());
                 };
 
-                if rhs_type.kind != TypeKind::Int || rhs_type.kind != TypeKind::Range {
+                if rhs_type.kind != TypeKind::Int && rhs_type.kind != TypeKind::Range {
                     return Err(SourceError::new(
                         "Type mismatch",
                         rhs.token.loc,

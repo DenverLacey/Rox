@@ -122,6 +122,19 @@ pub enum TypeKind {
     Composite(usize),
 }
 
+macro_rules! type_is_composite_type {
+    ($ty:tt, $($kind:ident),*) => {{
+        let mut result = false;
+        if let Self::Composite(idx) = *$ty {
+            let interp = Interpreter::get();
+            let typ = &interp.types[idx];
+            result = matches!(typ, $(TypeInfo::$kind(_))|*);
+        }
+
+        result
+    }};
+}
+
 impl TypeKind {
     pub fn size(&self) -> Size {
         let size: usize = match self {
@@ -160,30 +173,31 @@ impl TypeKind {
     }
 
     pub fn is_pointer(&self) -> bool {
-        if let Self::Composite(idx) = *self {
-            let interp = Interpreter::get();
-            let typ = &interp.types[idx];
+        type_is_composite_type!(self, Pointer)
+    }
 
-            if matches!(typ, TypeInfo::Pointer(_)) {
-                return true;
-            }
-        }
+    pub fn is_array(&self) -> bool {
+        type_is_composite_type!(self, Array)
+    }
 
-        false
+    pub fn is_slice(&self) -> bool {
+        type_is_composite_type!(self, Slice)
     }
 
     pub fn is_array_like(&self) -> bool {
-        if let Self::Composite(idx) = *self {
-            let interp = Interpreter::get();
-            let typ = &interp.types[idx];
+        type_is_composite_type!(self, Array, Slice)
+    }
 
-            match typ {
-                TypeInfo::Array(_) | TypeInfo::Slice(_) => return true,
-                _ => return false,
-            }
-        }
+    pub fn is_struct(&self) -> bool {
+        type_is_composite_type!(self, Struct)
+    }
 
-        false
+    pub fn is_enum(&self) -> bool {
+        type_is_composite_type!(self, Enum)
+    }
+
+    pub fn is_function(&self) -> bool {
+        type_is_composite_type!(self, Function)
     }
 }
 

@@ -397,23 +397,34 @@ impl Compiler {
             },
             AstInfo::Binary(AstBinaryKind::Subscript, lhs, rhs) => {
                 let array_addr = self.find_static_address(lhs)?;
-                todo!()
-                //         if (array_status == Find_Static_Address_Result::Not_Found ||
-                //             sub->lhs->type.kind != Value_Type_Kind::Array ||
-                //             !sub->rhs->is_constant(c))
-                //         {
-                //             status = Find_Static_Address_Result::Not_Found;
-                //             break;
-                //         }
-                //
-                //         if (array_status == Find_Static_Address_Result::Found_Global) {
-                //             status = Find_Static_Address_Result::Found_Global;
-                //         }
-                //
-                //         runtime::Int index;
-                //         c.evaluate_unchecked(sub->rhs, index);
-                //
-                //         address = array_address + index * sub->type.size();
+
+                if !lhs
+                    .typ
+                    .expect("[INTERNAL ERR] `lhs` of subscript operation doesn't have a type.")
+                    .is_array()
+                {
+                    return None;
+                }
+
+                // TODO:
+                // In the Fox compiler it could do a limited set of compile-time code execution
+                // instead of just hardcoding in saying it must be a integer literal to be viable
+                // for static address locating.
+                let TokenInfo::Int(index) = rhs.token.info else {
+                    return None;
+                };
+
+                Some(FindStaticAddressResult {
+                    addr: (array_addr.addr
+                        + index as Size
+                            * node
+                                .typ
+                                .expect("[INTERNAL ERR] subscript node doesn't have a type.")
+                                .size())
+                    .try_into()
+                    .expect("[INTERNAL ERR] Address doesn't fit in a `Address`."),
+                    ..array_addr
+                })
             }
             AstInfo::Binary(AstBinaryKind::MemberAccess, lhs, rhs) => {
                 let lhs_type = lhs
@@ -490,32 +501,30 @@ impl Compiler {
                 self.compile_node(sub_node)?;
                 Ok(true)
             }
-            AstInfo::Binary(AstBinaryKind::Subscript, lhs, rhs) => {
-                todo!()
-                //     case Typed_AST_Kind::Subscript: {
-                //         auto sub = dynamic_cast<Typed_AST_Binary *>(&node);
-                //         internal_verify(sub, "Failed to cast node to Binary* in emit_dynamic_address_code().");
-                //
-                //         Size element_size = sub->lhs->type.child_type()->size();
-                //
-                //         if (!emit_address_code(c, *sub->lhs)) {
-                //             return false;
-                //         }
-                //
-                //         if (sub->lhs->type.kind == Value_Type_Kind::Slice) {
-                //             c.emit_opcode(Opcode::Load);
-                //             c.emit_size(value_types::Ptr.size());
-                //         }
-                //
-                //         // offset = rhs * element_size
-                //         sub->rhs->compile(c);
-                //         c.emit_opcode(Opcode::Lit_Int);
-                //         c.emit_value<runtime::Int>(element_size);
-                //         c.emit_opcode(Opcode::Int_Mul);
-                //
-                //         // address = &lhs + offset
-                //         c.emit_opcode(Opcode::Int_Add);
-                //     } break;
+            AstInfo::Binary(AstBinaryKind::Subscript, container, index) => {
+                let size = node.typ.map_or(0, |t| t.size());
+
+                if !self.compile_dynamic_addr_code(container)? {
+                    return Ok(false);
+                }
+
+                if container
+                    .typ
+                    .expect(
+                        "[INTERNAL ERR] `container` of subscript operation doesn't have a type.",
+                    )
+                    .is_slice()
+                {
+                    todo!("load items pointer");
+                }
+
+                // elem_ptr = array_addr + (index * size)
+                self.compile_node(index)?;
+                self.emit_int(size as Int);
+                self.emit_inst(Instruction::Int_Mul);
+                self.emit_inst(Instruction::Int_Add);
+
+                Ok(true)
             }
             AstInfo::Binary(AstBinaryKind::MemberAccess, lhs, rhs) => {
                 let lhs_type = lhs
@@ -1192,7 +1201,19 @@ impl Compiler {
                     self.compile_call(node.typ, lhs, rhs)
                 }
             }
-            AstBinaryKind::Subscript => todo!(),
+            AstBinaryKind::Subscript => {
+                let Some(lhs_type) = lhs.typ else {
+                    panic!("[INTERNAL ERR] `rhs` of subscript operation doesn't have a type.");
+                };
+
+                if lhs_type.is_array() {
+                    self.compile_subscript_array(node)
+                } else if lhs_type.is_slice() {
+                    self.compile_subscript_slice(node)
+                } else {
+                    panic!("[INTERNAL ERR] `lhs` of subscript operation isn't an array or a slice and reached compilation");
+                }
+            }
             AstBinaryKind::MemberAccess => {
                 let find_result = self.find_static_address(node);
                 match find_result {
@@ -1332,5 +1353,37 @@ impl Compiler {
         }
 
         Ok(())
+    }
+
+    fn compile_subscript_array(&mut self, node: &Ast) -> Result<()> {
+        // INCOMPLETE:
+        // This currently only handles ordinary subscript and not slicing.
+
+        let stack_top = self.stack_top();
+        let size = node.typ.map_or(0, |t| t.size());
+
+        if let Some(result) = self.find_static_address(node) {
+            self.emit_dup(result.is_global, size, result.addr);
+        } else {
+            // elem_ptr = this...
+            if !self.compile_dynamic_addr_code(node)? {
+                return Err(SourceError::new(
+                    "Value without address",
+                    node.token.loc,
+                    "This expression doesn't have an address.",
+                )
+                .into());
+            }
+
+            // elem = Load(elem_ptr, size)
+            self.emit_load(size);
+        }
+
+        self.set_stack_top(stack_top + size);
+        Ok(())
+    }
+
+    fn compile_subscript_slice(&mut self, node: &Ast) -> Result<()> {
+        todo!()
     }
 }
