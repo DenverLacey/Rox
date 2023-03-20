@@ -14,7 +14,7 @@ use crate::{
         vm::{Addr, Size},
     },
     typing::value_type::{
-        runtime_type::{Bool, Char, Float, Int, Pointer},
+        runtime_type::{self, Bool, Char, Float, Int, Pointer},
         Type, TypeInfo, TypeInfoEnum, TypeInfoFunction, TypeInfoStruct, TypeKind,
     },
     util::errors::{Result, SourceError, SourceError2},
@@ -1084,6 +1084,17 @@ impl Compiler {
                             .try_into()
                             .expect("[INTERNAL ERR] `arg_size` doesn't fit into a `Size`.");
                         self.emit_call_builtin(arg_size, builtins::XXXprint_Array);
+                    }
+                    TypeInfo::Slice(info) => {
+                        self.emit_push_const_value(info.element_type);
+
+                        let arg_size = std::mem::size_of_val(&info.element_type)
+                            + std::mem::size_of::<runtime_type::String>();
+                        let arg_size: Size = arg_size
+                            .try_into()
+                            .expect("[INTERNAL ERR] `arg_size` doesn't fit into a `Size`.");
+
+                        self.emit_call_builtin(arg_size, builtins::XXXprint_Slice);
                     }
                     TypeInfo::Struct(info) => {
                         self.emit_ptr(info as *const TypeInfoStruct as Pointer);

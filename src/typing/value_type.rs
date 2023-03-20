@@ -64,6 +64,19 @@ impl Type {
                             .element_type
                             .assignable_to(target_info.element_type)
                     }
+                    TypeInfo::Slice(self_info) => {
+                        let TypeInfo::Slice(target_info) = target_type else {
+                            return false;
+                        };
+
+                        if (target.mutable && !self.mutable) || (!target.mutable && self.mutable) {
+                            return false;
+                        }
+
+                        !target_info
+                            .element_type
+                            .assignable_to(self_info.element_type)
+                    }
                     TypeInfo::Function(self_info) => {
                         let TypeInfo::Function(target_info) = target_type else {
                             return false;
@@ -130,6 +143,7 @@ impl TypeKind {
                         let element_size = info.element_type.size() as usize;
                         count * element_size
                     }
+                    TypeInfo::Slice(_) => std::mem::size_of::<runtime_type::String>(),
                     TypeInfo::Struct(info) => info
                         .fields
                         .iter()
@@ -152,6 +166,20 @@ impl TypeKind {
 
             if matches!(typ, TypeInfo::Pointer(_)) {
                 return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_array_like(&self) -> bool {
+        if let Self::Composite(idx) = *self {
+            let interp = Interpreter::get();
+            let typ = &interp.types[idx];
+
+            match typ {
+                TypeInfo::Array(_) | TypeInfo::Slice(_) => return true,
+                _ => return false,
             }
         }
 
@@ -181,6 +209,9 @@ impl Display for TypeKind {
                     }
                     TypeInfo::Array(info) => {
                         write!(f, "[{}]{}", info.size, info.element_type)
+                    }
+                    TypeInfo::Slice(info) => {
+                        write!(f, "[]{}", info.element_type)
                     }
                     TypeInfo::Struct(info) => {
                         write!(f, "{}", info.name)
@@ -214,6 +245,7 @@ impl Display for TypeKind {
 pub enum TypeInfo {
     Pointer(TypeInfoPointer),
     Array(TypeInfoArray),
+    Slice(TypeInfoSlice),
     Struct(TypeInfoStruct),
     Enum(TypeInfoEnum),
     Function(TypeInfoFunction),
@@ -227,6 +259,11 @@ pub struct TypeInfoPointer {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TypeInfoArray {
     pub size: usize,
+    pub element_type: Type,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TypeInfoSlice {
     pub element_type: Type,
 }
 

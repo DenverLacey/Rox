@@ -1147,6 +1147,20 @@ impl Typechecker {
                 return_type
             }
             AstBinaryKind::Subscript => {
+                self.typecheck_node(interp, lhs)?;
+                let Some(lhs_type) = lhs.typ else {
+                    return Err(SourceError::new("Type Mismatch", lhs.token.loc, "This expression doesn't have a type.").into());
+                };
+
+                if !lhs_type.is_array_like() {
+                    return Err(SourceError::new(
+                        "Type mismatch",
+                        lhs.token.loc,
+                        format!("Expected an array type but found `{}`.", lhs_type.kind),
+                    )
+                    .into());
+                }
+
                 todo!()
             }
             AstBinaryKind::MemberAccess => {

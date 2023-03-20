@@ -80,6 +80,25 @@ pub fn XXXprint_Array(stack: &mut Stack, arg_size: Size) {
     writeln!(stdout).expect("Failed to write to stdout.");
 }
 
+pub fn XXXprint_Slice(stack: &mut Stack, arg_size: Size) {
+    let element_type: Type = stack.pop_value();
+
+    let slice_bytes = stack.pop(TypeKind::String.size());
+    let slice_ptr = &slice_bytes[0] as *const u8 as *const () as *const runtime_type::String;
+    let slice = unsafe { *slice_ptr };
+
+    let slice_data = unsafe {
+        std::slice::from_raw_parts(
+            slice.chars,
+            slice.len as usize * element_type.size() as usize,
+        )
+    };
+
+    let mut stdout = std::io::stdout();
+    print_array(&mut stdout, slice_data, element_type);
+    writeln!(stdout).expect("Failed to write to stdout.");
+}
+
 pub fn XXXprint_enum(stack: &mut Stack, _: Size) {
     let type_info: &TypeInfoEnum = stack.pop_value();
     let value: Int = stack.pop_value();
@@ -141,7 +160,26 @@ fn print_value(stdout: &mut Stdout, ptr: *const (), typ: Type) {
                     let value = unsafe { *(ptr as *const *const ()) };
                     print_pointer(stdout, value);
                 }
-                TypeInfo::Array(info) => todo!(),
+                TypeInfo::Array(info) => {
+                    let ptr = unsafe { ptr as *const u8 };
+
+                    let size = info.size * info.element_type.size() as usize;
+                    let data = unsafe { std::slice::from_raw_parts(ptr, size) };
+
+                    print_array(stdout, data, info.element_type);
+                }
+                TypeInfo::Slice(info) => {
+                    let ptr = unsafe { ptr as *const runtime_type::String };
+                    let slice = unsafe { *ptr };
+                    let data = unsafe {
+                        std::slice::from_raw_parts(
+                            slice.chars,
+                            slice.len as usize * info.element_type.size() as usize,
+                        )
+                    };
+
+                    print_array(stdout, data, info.element_type);
+                }
                 TypeInfo::Struct(info) => {
                     print_struct(stdout, ptr, info);
                 }

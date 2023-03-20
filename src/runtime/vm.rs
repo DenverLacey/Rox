@@ -562,6 +562,7 @@ impl<'exe> VM<'exe> {
                             println!("{:04X}: {:?}", value_idx, value);
                         }
                         TypeInfo::Array(info) => todo!(),
+                        TypeInfo::Slice(info) => todo!(),
                         TypeInfo::Struct(info) => todo!(),
                         TypeInfo::Enum(info) => {
                             let value: Int = reader.read();
